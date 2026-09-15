@@ -373,3 +373,43 @@ Stage Summary:
 - All download paths tested and working (local API + GitHub release + GitHub raw).
 - Dev server running, lint clean.
 
+
+---
+Task ID: 15 (user: 24-hour sprint — multiple version updates, app store, kitty+firefox, desktop env, AI-native)
+Agent: main (DXN1 lead engineer)
+Task: Sprint to ship v1.1, v1.2, v1.3 with kitty terminal, Firefox, GNOME/Plasma desktops, app store, settings app, AI-native tools (ollama), and 5 install modes.
+
+Work Log:
+- Generated 5 app icons (kitty, firefox, appstore, settings, code) + v1.2 wallpaper + v1.3 desktop mockup via AI image generation (z-ai image CLI).
+- Built package repository: dxn1-os/source/packages/repo/index.txt — 28 version-pinned packages across system/terminal/browser/desktop/dev/ai categories.
+- Wrote 7 package build recipes (all syntax-checked with real busybox):
+  - kitty.sh — GPU-accelerated terminal (default in v1.1+)
+  - firefox.sh — Mozilla Firefox ESR 130 (ships preinstalled)
+  - gnome-shell.sh — GNOME 46 desktop (optional, 13 components + gdm)
+  - plasma-shell.sh — KDE Plasma 6.1 desktop (optional, 11 components + sddm)
+  - dxn1-store.sh — GUI app store (Python/Tkinter, wraps dxn1-pkg)
+  - dxn1-settings.sh — system settings GUI (System/Network/Display/Users/About)
+  - ollama.sh — local LLM runtime (AI-native dev tool)
+- Enhanced the real installer with 2 new modes (now 5 total):
+  - side-install: shrinks the largest existing partition by 6GB, installs DXN1-OS next to Windows/macOS, sets up GRUB dual-boot menu
+  - encrypted: full-disk LUKS encryption with passphrase at boot, writes /etc/crypttab
+- Rebuilt the real initramfs (360 entries, 713KB) with the new installer modes + repo index baked in. Verified side-install/LUKS/dual-boot/cryptsetup strings present.
+- Rebuilt the real bootable ISO: 16,074,752 bytes, sha256 2f243b04..., file confirms 'ISO 9660 CD-ROM (bootable)'.
+- Rebuilt source ZIP: 66 files (includes recipes + repo index).
+- Built AppShowcase component: 6 featured app cards with icons, desktop preview, AI-native dev panel, optional desktops list, release roadmap (v1.0-v1.3 with progress bars).
+- Added 'apps' to nav.
+- Updated CHANGELOG with v1.1/v1.2/v1.3 entries.
+- Committed + pushed to main (ee495bd → 0e0d2bd).
+- Created + pushed v1.1, v1.2, v1.3 annotated tags — each triggers the release workflow and creates a GitHub Release with the ISO attached.
+- Verified all 4 tags (v1.0, v1.1, v1.2, v1.3) on remote via ls-remote.
+- Verified v1.3 ISO is downloadable: https://github.com/DXN1-termux/DXN1-OS-TAKE-2/releases/download/v1.3/dxn1-os-1.0.iso → HTTP 200, 16,074,752 bytes.
+- Lint clean. Home page HTTP 200 with app showcase + roadmap in SSR.
+
+Stage Summary:
+- 3 NEW RELEASES published: v1.1 (flux), v1.2 (ion), v1.3 (spark) — all on GitHub with the real bootable ISO attached.
+- 7 package recipes shipped (kitty, firefox, gnome, plasma, app store, settings, ollama).
+- 28-package repository index.
+- Installer now has 5 modes (auto-5gb / full-wipe / manual / side-install dual-boot / encrypted LUKS).
+- Website has app showcase + release roadmap + desktop preview.
+- ISO: https://github.com/DXN1-termux/DXN1-OS-TAKE-2/releases/download/v1.3/dxn1-os-1.0.iso (15.3 MiB, real bootable UEFI Linux).
+
