@@ -17,6 +17,9 @@ model User {
   id        String   @id @default(cuid())
   email     String   @unique
   name      String?
+  password  String?  // hashed (bcrypt) for credentials auth; null for OAuth
+  role      String   @default("user") // "user" | "admin" | "developer" | "student"
+  setupComplete Boolean @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

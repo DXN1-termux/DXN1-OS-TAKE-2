@@ -5,7 +5,7 @@ import BootSequence from "@/components/dxn1/boot-sequence";
 import Nav from "@/components/dxn1/nav";
 import Hero from "@/components/dxn1/hero";
 import Features from "@/components/dxn1/features";
-import Downloads from "@/components/dxn1/downloads";
+import DownloadCenter from "@/components/dxn1/download-center";
 import InstallerWizard from "@/components/dxn1/installer-wizard";
 import DriverMatrix from "@/components/dxn1/driver-matrix";
 import SourceTree from "@/components/dxn1/source-tree";
@@ -57,7 +57,7 @@ export default function Home() {
           onDownloadSource={downloadSource}
         />
         <Features />
-        <Downloads os={os} />
+        <DownloadCenter os={os} />
         <InstallerWizard />
         <DriverMatrix />
         <SourceTree />
