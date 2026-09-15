@@ -1,0 +1,17 @@
+
+  ____  _  _   _   _  ___  _   _  ___
+ |  _ \| || | /_\ | \| |/ __|| | | |/ __|
+ | | | | __ |/ _ \| .` |\__ \| |_| | (_ |
+ |_| |_||_/_/ \_\_|\_|___(_)___/ \___|
+
+  Welcome to DXN1-OS 1.0 'oxide'.
+  Real Linux kernel + real busybox userspace.
+
+  Try:
+    uname -a            # what kernel are we running
+    cat /etc/os-release # distro info
+    dxn1-installer      # install DXN1-OS to disk
+    dxn1-update         # check for OS updates
+    busybox --list      # all available applets
+
+  (c) DXN1 Project  -  GPLv2+

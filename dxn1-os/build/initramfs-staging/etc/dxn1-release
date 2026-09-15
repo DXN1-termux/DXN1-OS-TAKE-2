@@ -1,0 +1,6 @@
+DXN1-OS 1.0
+build 2025.01
+arch x86_64
+codename "oxide"
+kernel 5.10.0-32-amd64
+initramfs busybox-1.35.0 (musl static)

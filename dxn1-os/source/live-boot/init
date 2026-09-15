@@ -1,0 +1,105 @@
+#!/bin/busybox sh
+# DXN1-OS real PID 1 init — runs on the REAL Linux 5.10 kernel.
+#
+# On boot, presents a menu:
+#   1) Live mode (explore without installing) — drops to a busybox root shell
+#   2) Install DXN1-OS to disk  — runs /sbin/dxn1-installer
+#   3) Run dxn1-update (auto-updater)
+#   4) Reboot
+#   5) Power off
+
+export PATH=/bin:/sbin:/usr/bin:/usr/sbin
+
+# mount kernel virtual filesystems (REAL)
+/bin/busybox mount -t proc     none /proc      2>/dev/null
+/bin/busybox mount -t sysfs    none /sys       2>/dev/null
+/bin/busybox mount -t devtmpfs none /dev        2>/dev/null || /bin/busybox mdev -s
+/bin/busybox mount -t tmpfs    none /run        2>/dev/null
+/bin/busybox mount -t tmpfs    none /tmp        2>/dev/null
+/bin/busybox mount -t devpts   none /dev/pts    2>/dev/null
+
+# bring up loopback for networking (needed by updater)
+/bin/busybox ip link set lo up 2>/dev/null
+
+# set hostname
+echo dxn1-oxide > /proc/sys/kernel/hostname 2>/dev/null
+
+# real boot banner
+cat <<'BANNER'
+
+
+  ____  _  _   _   _  ___  _   _  ___
+ |  _ \| || | /_\ | \| |/ __|| | | |/ __|
+ | | | | __ |/ _ \| .` |\__ \| |_| | (_ |
+ |_| |_||_/_/ \_\_|\_|___(_)___/ \___|
+
+  1.0 'oxide'   kernel $(uname -r)
+  REAL linux + REAL busybox   (not a simulation)
+
+BANNER
+
+sleep 1
+
+# === BOOT MENU ===
+while true; do
+    echo ""
+    echo "  +---------------------------------------------+"
+    echo "  |         DXN1-OS 1.0 -- boot menu            |"
+    echo "  +---------------------------------------------+"
+    echo "  |  1) Live mode  (explore, no install)        |"
+    echo "  |  2) Install DXN1-OS to disk                |"
+    echo "  |  3) Run dxn1-update  (auto-updater)        |"
+    echo "  |  4) Reboot                                  |"
+    echo "  |  5) Power off                               |"
+    echo "  +---------------------------------------------+"
+    printf "  choice [1-5] (default 1, auto-boots in 10s): "
+    read -t 10 choice 2>/dev/null
+    rc=$?
+    [ $rc -ne 0 ] && choice=1
+    case "$choice" in
+        1|"")
+            echo ""
+            echo "  >> entering live mode."
+            echo "  >> type 'help' for commands, 'dxn1-installer' to install,"
+            echo "  >> 'dxn1-update' to check for OS updates."
+            echo ""
+            setsid -c /bin/busybox cttyhack /bin/busybox sh
+            ;;
+        2)
+            echo ""
+            echo "  >> launching DXN1-OS installer..."
+            echo ""
+            if [ -x /sbin/dxn1-installer ]; then
+                /sbin/dxn1-installer
+            else
+                echo "  [!] installer not found; dropping to shell."
+                setsid -c /bin/busybox cttyhack /bin/busybox sh
+            fi
+            ;;
+        3)
+            echo ""
+            echo "  >> running dxn1-update --check..."
+            if [ -x /sbin/dxn1-update ]; then
+                /sbin/dxn1-update --check
+            else
+                echo "  [!] updater not found at /sbin/dxn1-update"
+            fi
+            echo ""
+            echo "  press Enter to return to menu..."
+            read junk
+            ;;
+        4)
+            echo "  >> rebooting..."
+            /bin/busybox sync
+            /bin/busybox reboot -f
+            ;;
+        5)
+            echo "  >> powering off..."
+            /bin/busybox sync
+            /bin/busybox poweroff -f
+            ;;
+        *)
+            echo "  [!] invalid choice '$choice'"
+            ;;
+    esac
+done

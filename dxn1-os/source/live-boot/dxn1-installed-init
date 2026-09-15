@@ -1,0 +1,46 @@
+#!/bin/busybox sh
+# DXN1-OS installed-system PID 1 init.
+# Runs from the real root partition on disk (not the initramfs).
+# Mounts filesystems, starts services, drops to a login shell.
+
+export PATH=/bin:/sbin:/usr/bin:/usr/sbin
+
+# mount filesystems from /etc/fstab
+/bin/busybox mount -o remount,rw / 2>/dev/null
+/bin/busybox mount -a 2>/dev/null
+
+# devtmpfs if not already
+/bin/busybox mount -t devtmpfs none /dev 2>/dev/null || /bin/busybox mdev -s
+/bin/busybox mount -t devpts none /dev/pts 2>/dev/null
+
+# hostname
+[ -f /etc/hostname ] && cat /etc/hostname > /proc/sys/kernel/hostname 2>/dev/null || echo dxn1-oxide > /proc/sys/kernel/hostname 2>/dev/null
+
+# loopback
+/bin/busybox ip link set lo up 2>/dev/null
+
+# swapon
+/bin/busybox swapon -a 2>/dev/null
+
+# clean up stale files
+/bin/busybox rm -rf /tmp/* /var/run/* /var/lock/* 2>/dev/null
+/bin/busybox mkdir -p /var/run /var/lock /var/log 2>/dev/null
+
+# banner
+cat <<'BANNER'
+
+
+  ____  _  _   _   _  ___  _   _  ___
+ |  _ \| || | /_\ | \| |/ __|| | | |/ __|
+ | | | | __ |/ _ \| .` |\__ \| |_| | (_ |
+ |_| |_||_/_/ \_\_|\_|___(_)___/ \___|
+
+BANNER
+echo "  DXN1-OS 1.0 'oxide' (installed)  kernel $(uname -r)"
+echo ""
+echo "  run 'dxn1-update' to check for OS updates."
+echo ""
+
+# drop to login shell
+echo "dxn1-oxide login: root (auto-login)"
+exec setsid -c /bin/busybox cttyhack /bin/busybox sh

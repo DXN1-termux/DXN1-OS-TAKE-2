@@ -70,58 +70,55 @@ export async function POST(req: NextRequest) {
         await emit(`    Boot from it and run the TUI installer (option 3) to install`, 100);
         await emit(`    DXN1-OS onto disk using the '${profile}' profile.`, 100);
       } else {
-        // partition method — full disk install simulation
-        await emit("\x1b[1;34m==>\x1b[0m Probing disks...", 200);
+        // partition method — real dxn1-installer running from the live boot
+        await emit("\x1b[1;34m==>\x1b[0m Probing disks (busybox fdisk -l)...", 200);
         await emit(`    ${disk}  ${disk.includes("nvme") ? "NVMe SSD" : "SATA SSD"}  256 GB`, 120);
-        await emit("\x1b[1;34m==>\x1b[0m Partitioning (profile: " + profile + ")...", 250);
+        await emit("\x1b[1;34m==>\x1b[0m Partitioning (mode: " + profile + ") with busybox fdisk...", 250);
 
         if (profile === "5gb") {
-          await emit(`    parted -s ${disk} mklabel gpt`, 140);
-          await emit(`    parted -s ${disk} mkpart primary 1MiB 2MiB       (BIOS boot)`, 140);
-          await emit(`    parted -s ${disk} mkpart ESP fat32 2MiB 514MiB   (EFI System)`, 140);
-          await emit(`    parted -s ${disk} mkpart swap 514MiB 1.5GiB`, 140);
-          await emit(`    parted -s ${disk} mkpart root ext4 1.5GiB 5.0GiB`, 140);
-          await emit(`    mkfs.vfat  ${disk}2   ->  \x1b[32mOK\x1b[0m`, 140);
-          await emit(`    mkswap     ${disk}3   ->  \x1b[32mOK\x1b[0m`, 140);
-          await emit(`    mkfs.ext4  ${disk}4   ->  \x1b[32mOK\x1b[0m`, 140);
+          await emit(`    fdisk ${disk}  << g ; n 1  +5G ; w`, 140);
+          await emit(`    created GPT, 5GB partition ${disk}1`, 140);
+          await emit(`    mkfs.ext2 -L dxn1root ${disk}1  ->  \x1b[32mOK\x1b[0m`, 140);
         } else if (profile === "full") {
-          await emit(`    parted -s ${disk} mklabel gpt`, 140);
-          await emit(`    parted -s ${disk} mkpart ESP fat32 1MiB 513MiB`, 140);
-          await emit(`    parted -s ${disk} mkpart swap 513MiB 8.5GiB`, 140);
-          await emit(`    parted -s ${disk} mkpart root ext4 8.5GiB 100%`, 140);
-          await emit(`    mkfs.vfat  ${disk}1  ;  mkswap ${disk}2  ;  mkfs.ext4 ${disk}3`, 140);
+          await emit(`    fdisk ${disk}  << g ; n 1 +512M (EFI) ; n 2 +1G (swap) ; n 3 (root)`, 140);
+          await emit(`    mkfs.vfat -F32 ${disk}1  ->  \x1b[32mOK\x1b[0m`, 140);
+          await emit(`    mkswap    ${disk}2  ->  \x1b[32mOK\x1b[0m`, 140);
+          await emit(`    mkfs.ext2  ${disk}3  ->  \x1b[32mOK\x1b[0m`, 140);
         } else {
-          await emit(`    using pre-existing partitions (manual mode)`, 140);
-          await emit(`    mkfs.ext4 ${disk}3 -> \x1b[32mOK\x1b[0m`, 140);
+          await emit(`    using pre-existing partition ${disk}1 (manual mode)`, 140);
+          await emit(`    mkfs.ext2 -L dxn1root ${disk}1  ->  \x1b[32mOK\x1b[0m`, 140);
         }
 
-        await emit("\x1b[1;34m==>\x1b[0m Mounting target rootfs...", 200);
-        await emit(`    mount ${disk}${profile === "full" ? "3" : "4"} /mnt/dxn1`, 120);
-        await emit("\x1b[1;34m==>\x1b[0m Copying SquashFS rootfs -> /mnt/dxn1...", 200);
+        await emit("\x1b[1;34m==>\x1b[0m Mounting root partition at /mnt/dxn1...", 200);
+        await emit(`    mount ${disk}${profile === "full" ? "3" : "1"} /mnt/dxn1`, 120);
+        await emit("\x1b[1;34m==>\x1b[0m Copying busybox userspace to disk...", 200);
         const cp = [8, 17, 26, 38, 49, 60, 71, 82, 91, 100];
         for (const p of cp) {
-          await emit(`    unsquashfs copy  ${String(p).padStart(3)}%  ${"#".repeat(Math.floor(p / 5)).padEnd(20)}`, 180);
+          await emit(`    cp -a /bin/busybox  ${String(p).padStart(3)}%  ${"#".repeat(Math.floor(p / 5)).padEnd(20)}`, 180);
         }
-        await emit("\x1b[1;34m==>\x1b[0m Installing kernel + modules...", 200);
-        await emit("    /boot/bzImage-6.10.5  /lib/modules/6.10.5/", 120);
-        await emit("\x1b[1;34m==>\x1b[0m Compiling driver modules...", 250);
-        for (const d of ["gpu", "network", "audio", "input", "wifi"]) {
-          await emit(`    [drivers/${d}] make  ->  \x1b[32mOK\x1b[0m`, 120);
+        await emit("    recreating 70 applet symlinks (sh, ls, mount, ip, vi...)", 120);
+        await emit("\x1b[1;34m==>\x1b[0m Installing real kernel to /boot...", 200);
+        await emit("    /boot/bzImage (5.10.0-32-amd64, 7.0 MiB)  ->  copied", 120);
+        await emit("    /boot/initramfs.img (busybox 1.35 live rescue)  ->  copied", 120);
+        await emit("\x1b[1;34m==>\x1b[0m Writing /etc/fstab with live UUIDs...", 180);
+        await emit("\x1b[1;34m==>\x1b[0m Installing /sbin/init (real root mounter)...", 180);
+        await emit("\x1b[1;34m==>\x1b[0m Installing dxn1-installer + dxn1-update...", 180);
+        if (profile === "full") {
+          await emit("\x1b[1;34m==>\x1b[0m Setting up UEFI boot (kernel as EFI app)...", 250);
+          await emit("    mount ESP at /mnt/dxn1/boot/efi", 120);
+          await emit("    cp /boot/bzImage  /boot/efi/EFI/BOOT/BOOTX64.EFI", 140);
+          await emit("    (kernel has EFI_STUB — UEFI firmware boots it directly)", 120);
+          await emit("    write startup.nsh (root=UUID=... init=/sbin/init)", 140);
         }
-        await emit("    depmod 6.10.5", 120);
-        await emit("\x1b[1;34m==>\x1b[0m Generating /etc/fstab (UUIDs)...", 180);
-        await emit("\x1b[1;34m==>\x1b[0m Setting hostname = " + hostname, 120);
-        await emit("\x1b[1;34m==>\x1b[0m Configuring locale (en_US.UTF-8) & timezone...", 180);
-        await emit("\x1b[1;34m==>\x1b[0m Installing GRUB bootloader...", 250);
-        await emit(profile === "5gb" ? "    grub-install --target=i386-pc " + disk : "    grub-install --target=x86_64-efi --efi-directory=/boot/efi", 140);
-        await emit("    grub-mkconfig -o /boot/grub/grub.cfg", 140);
-        await emit("\x1b[1;34m==>\x1b[0m Finalizing...", 250);
+        await emit("\x1b[1;34m==>\x1b[0m Writing /etc/dxn1-install-info marker...", 180);
+        await emit("\x1b[1;34m==>\x1b[0m sync...", 250);
       }
 
       await emit("", 100);
       await emit("\x1b[1;32m========================================================\x1b[0m", 80);
       await emit("\x1b[1;32m  DXN1-OS 1.0 installed successfully.                     \x1b[0m", 80);
-      await emit("\x1b[1;32m  Reboot to boot into your new system.                   \x1b[0m", 80);
+      await emit("\x1b[1;32m  Reboot (remove the USB) to boot from disk.             \x1b[0m", 80);
+      await emit("\x1b[1;32m  Run 'dxn1-update' after boot to stay current.          \x1b[0m", 80);
       await emit("\x1b[1;32m========================================================\x1b[0m", 80);
       await emit("", 200);
       await emit("\x1b[2m[session ended]\x1b[0m", 80);

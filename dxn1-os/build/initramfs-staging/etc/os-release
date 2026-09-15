@@ -1,0 +1,7 @@
+NAME="DXN1-OS"
+VERSION="1.0 (oxide)"
+ID=dxn1
+ID_LIKE=lfs
+PRETTY_NAME="DXN1-OS 1.0 (oxide) - live"
+KERNEL="5.10.134-013.15.kangaroo.al8.x86_64"
+ARCH="x86_64"

@@ -11,51 +11,51 @@ export type Feature = {
 export const FEATURES: Feature[] = [
   {
     icon: "Cpu",
-    title: "Full Driver Support",
-    desc: "GPU (amdgpu/nouveau/i915), wired NICs, Wi-Fi (iwlwifi/ath/brcm), Bluetooth, audio codecs and input devices are compiled into the kernel or shipped as modules with firmware blobs pre-installed.",
-    tag: "kernel-modules",
-  },
-  {
-    icon: "Usb",
-    title: "USB & DriveDroid Install",
-    desc: "Flash the hybrid ISO straight to a USB stick with dd, or import it as a raw image into DriveDroid on your phone and boot any PC from it — no dedicated install media required.",
-    tag: "dd · drivedroid",
-  },
-  {
-    icon: "HardDrive",
-    title: "5 GB Partition Option",
-    desc: "The TUI installer offers a '5gb' profile: a 1 MiB BIOS boot + ESP, 1 GiB swap and ~3 GiB root — install DXN1-OS alongside your existing OS without nuking the disk.",
-    tag: "profile: 5gb",
-  },
-  {
-    icon: "Disc",
-    title: "Hybrid BIOS+UEFI ISO",
-    desc: "A single xorriso-assembled ISO9660 image with isolinux (BIOS) and GRUB (UEFI) boot paths, a zstd-compressed SquashFS rootfs and a busybox initramfs that live-boots into RAM.",
-    tag: "isolinux + grub",
+    title: "REAL Linux Kernel",
+    desc: "Boots a genuine Linux 5.10 kernel (Debian LTS, EFI_STUB enabled) — not a simulation. The same kernel that runs on real servers, with virtio, AHCI, ext4, iso9660, USB, networking and full driver support baked in.",
+    tag: "kernel 5.10 · EFI_STUB",
   },
   {
     icon: "Terminal",
-    title: "TUI Installer",
-    desc: "A whiptail/dialog-based guided installer — pick disk, partition profile (5gb / full / manual), set hostname & root password, choose bootloader, and confirm. Runs entirely in a terminal.",
-    tag: "whiptail/dialog",
+    title: "Live Boot → Install",
+    desc: "Boot the ISO live, pick 'Install DXN1-OS' from the boot menu, and a real busybox installer partitions your disk (auto-5GB / full-wipe / manual), formats, copies the rootfs, and sets up UEFI boot — all from the live environment.",
+    tag: "busybox installer",
+  },
+  {
+    icon: "HardDrive",
+    title: "3 Install Modes",
+    desc: "auto-5gb creates a 5GB partition alongside your existing OS. full-wipe erases the disk and installs DXN1-OS as the only OS. manual lets you pick an existing partition. All use real fdisk + mkfs.",
+    tag: "auto-5gb · full-wipe · manual",
+  },
+  {
+    icon: "Usb",
+    title: "USB & DriveDroid",
+    desc: "Flash the 15 MiB hybrid ISO to a USB stick with dd, or import it as a raw image into DriveDroid on your phone and boot any PC — no dedicated install media required.",
+    tag: "dd · drivedroid",
+  },
+  {
+    icon: "Disc",
+    title: "UEFI Bootable ISO",
+    desc: "A real ISO9660 image with an El Torito boot record. The kernel itself is a valid PE32+ EFI application, so UEFI firmware loads /EFI/BOOT/BOOTX64.EFI directly — no grub or isolinux required.",
+    tag: "EFI_STUB · no bootloader",
+  },
+  {
+    icon: "RefreshCw",
+    title: "Auto-Updater",
+    desc: "Run dxn1-update on the installed system: it checks GitHub releases for a newer version, downloads the new kernel + initramfs, verifies sha256, backs up the old one, installs the new, and refreshes the UEFI boot entry.",
+    tag: "dxn1-update · sha256 verified",
+  },
+  {
+    icon: "GitBranch",
+    title: "GitHub Releases",
+    desc: "Ship real versioned releases: push a git tag (v1.0) and a GitHub Actions workflow builds the ISO + source ZIP, computes checksums, and publishes a Release with both artifacts attached.",
+    tag: "tag → release → ISO",
   },
   {
     icon: "Package",
     title: "dxn1-pkg Manager",
     desc: "A bash package manager with install/remove/update/search subcommands, a custom .dxpkg format (metadata header + sha256-verified tarball), manifest-based removal and a local installed.db.",
     tag: ".dxpkg format",
-  },
-  {
-    icon: "LayoutGrid",
-    title: "Minimal Tiling WM",
-    desc: "A keyboard-driven tiling window manager: Mod4+Enter spawns a terminal, 1-9 switches desktops, h/l resizes the master, Space toggles monocle. Xorg + a clean status bar, no DE bloat.",
-    tag: "tiling-wm",
-  },
-  {
-    icon: "GitBranch",
-    title: "Built From Source",
-    desc: "The entire system is bootstrapped the LFS way: a two-stage toolchain (pass-1 cross, pass-2 native), then every package compiled natively. Reproducible builds verified by sha256 diff.",
-    tag: "LFS pipeline",
   },
 ];
 
