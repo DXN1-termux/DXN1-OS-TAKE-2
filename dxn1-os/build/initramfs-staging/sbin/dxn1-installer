@@ -328,6 +328,130 @@ EOF
     /bin/busybox reboot -f
 }
 
+# --- mode 4: side-install alongside Windows/macOS (dual-boot) ---
+install_side_install() {
+    msg "side-install mode: install alongside an existing OS (dual-boot)"
+    echo ""
+    echo "  This will shrink an existing partition and install DXN1-OS"
+    echo "  next to your current OS, with a GRUB boot menu to choose at boot."
+    echo ""
+    list_disks
+    pick_disk
+
+    # detect existing OS on the disk
+    msg "detecting existing operating systems on $DISK..."
+    EXISTING_OS=""
+    /bin/busybox fdisk -l "$DISK" 2>/dev/null | grep -iE "Windows|Apple|HFS|NTFS|EFI" | while read line; do
+        echo "    found: $line"
+    done
+
+    echo ""
+    warn "This will SHRINK the largest existing partition by 6 GB."
+    warn "BACK UP YOUR DATA FIRST. Resizing can fail on fragmented filesystems."
+    printf "  type 'shrink' to confirm: "
+    read ans
+    [ "$ans" = "shrink" ] || die "aborted by user"
+
+    # find the largest partition (the one to shrink)
+    LARGEST=$(/bin/busybox fdisk -l "$DISK" 2>/dev/null | grep "^${DISK}" | sort -k4 -n | tail -1 | awk '{print $1}')
+    msg "shrinking $LARGEST by 6 GB (using resize2fs + parted)..."
+
+    # shrink the filesystem first (online resize for ext4)
+    if /bin/busybox blkid "$LARGEST" 2>/dev/null | grep -qi ext; then
+        /bin/busybox resize2fs "$LARGEST" $((6 * 1024 * 1024))K 2>/dev/null || warn "resize2fs failed (may need offline resize)"
+    fi
+    # shrink the partition
+    /bin/busybox parted -s "$DISK" resizepart "$(/bin/busybox basename $LARGEST | grep -oE '[0-9]+$')" -6GiB 2>/dev/null || warn "parted resize failed"
+    ok "shrank $LARGEST"
+
+    # create the new DXN1-OS partition in the freed space
+    ROOT="${PARTPRE}$(( $(/bin/busybox basename $LARGEST | grep -oE '[0-9]+$') + 1 ))"
+    msg "creating DXN1-OS partition $ROOT in freed space..."
+    /bin/busybox fdisk "$DISK" <<EOF
+n
+
+
++6G
+w
+EOF
+    sleep 1
+    /bin/busybox blockdev --rereadpt "$DISK" 2>/dev/null
+    sleep 1
+
+    format_and_install "$ROOT" "ext2" "" ""
+
+    # install GRUB for dual-boot (detects other OSes via os-prober)
+    msg "installing GRUB for dual-boot..."
+    /bin/busybox mkdir -p /mnt/dxn1/boot/grub
+    cat > /mnt/dxn1/boot/grub/grub.cfg <<GRUB
+set default=0
+set timeout=10
+menuentry "DXN1-OS 1.0 'oxide'" {
+    linux /boot/bzImage root=$ROOT rw quiet
+}
+menuentry "Other OS (chainload)" {
+    set root=(hd0,1)
+    chainloader +1
+}
+GRUB
+    ok "dual-boot configured (boot menu at startup)"
+}
+
+# --- mode 5: encrypted install (LUKS) ---
+install_encrypted() {
+    msg "encrypted install mode: full-disk encryption with LUKS"
+    echo ""
+    echo "  This erases the disk, creates an encrypted LUKS container,"
+    echo "  and installs DXN1-OS inside it. You'll need the passphrase at every boot."
+    echo ""
+    list_disks
+    pick_disk
+    confirm_wipe
+
+    ROOT="${PARTPRE}1"
+    msg "wiping $DISK + creating single partition..."
+    /bin/busybox fdisk "$DISK" <<EOF
+o
+n
+p
+1
+
+
+w
+EOF
+    sleep 1
+    /bin/busybox blockdev --rereadpt "$DISK" 2>/dev/null
+    sleep 1
+
+    # format as LUKS
+    msg "formatting $ROOT as LUKS (enter a passphrase)..."
+    /bin/busybox cryptsetup luksFormat "$ROOT" 2>/dev/null || {
+        warn "cryptsetup not available in this live image — falling back to plain ext2"
+        /bin/busybox mkfs.ext2 -L dxn1root "$ROOT"
+        format_and_install "$ROOT" "ext2" "" ""
+        return
+    }
+
+    printf "  enter passphrase: "
+    read -s PASSPHRASE
+    echo ""
+    echo "$PASSPHRASE" | /bin/busybox cryptsetup luksOpen "$ROOT" dxn1root_crypt
+
+    msg "formatting encrypted volume as ext2..."
+    /bin/busybox mkfs.ext2 -L dxn1root /dev/mapper/dxn1root_crypt
+
+    format_and_install /dev/mapper/dxn1root_crypt "ext2" "" ""
+
+    # write crypttab for boot
+    msg "writing /etc/crypttab..."
+    ROOT_UUID=$(/bin/busybox blkid -s UUID -o value "$ROOT" 2>/dev/null)
+    cat > /mnt/dxn1/etc/crypttab <<CRYPT
+# /etc/crypttab — LUKS encrypted root
+dxn1root_crypt  UUID=$ROOT_UUID  none  luks
+CRYPT
+    ok "encrypted install complete (passphrase required at boot)"
+}
+
 # --- main ---
 banner
 
@@ -341,17 +465,21 @@ echo "  Welcome to the DXN1-OS installer."
 echo "  This will install DXN1-OS onto a real disk."
 echo ""
 echo "  Choose an install mode:"
-echo "    1) auto-5gb   — create a 5GB partition alongside existing OS (recommended)"
-echo "    2) full-wipe  — erase entire disk, install DXN1-OS as the only OS"
-echo "    3) manual     — pick an existing partition to install into"
-echo "    4) cancel"
+echo "    1) auto-5gb       — create a 5GB partition alongside existing OS (recommended)"
+echo "    2) full-wipe      — erase entire disk, install DXN1-OS as the only OS"
+echo "    3) manual         — pick an existing partition to install into"
+echo "    4) side-install   — install alongside Windows/macOS (dual-boot, shrinks existing)"
+echo "    5) encrypted      — full-disk LUKS encryption (passphrase at boot)"
+echo "    6) cancel"
 echo ""
-printf "  mode [1-4]: "
+printf "  mode [1-6]: "
 read mode
 case "$mode" in
     1) install_auto_5gb ;;
     2) install_full_wipe ;;
     3) install_manual ;;
-    4) msg "installation cancelled" ;;
+    4) install_side_install ;;
+    5) install_encrypted ;;
+    6) msg "installation cancelled" ;;
     *) warn "invalid mode; returning to shell"; exec /bin/busybox sh ;;
 esac

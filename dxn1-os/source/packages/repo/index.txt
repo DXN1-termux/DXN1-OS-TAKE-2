@@ -1,0 +1,37 @@
+# DXN1-OS Package Repository Index
+# This file lists all packages available via `dxn1-pkg install <name>`.
+# Each entry: name | version | category | description | size
+# Categories: system, terminal, browser, desktop, dev, ai, media, utils
+
+# === v1.1 — Developer Essentials ===
+kitty          | 0.36.4  | terminal  | Fast, GPU-accelerated terminal emulator          | 8.2 MB
+firefox        | 130.0   | browser   | Mozilla Firefox web browser (ESR)                | 78.4 MB
+neovim         | 0.10.1  | dev       | Modern Vim fork, Lua-extensible                  | 5.1 MB
+git            | 2.46.0  | dev       | Distributed version control system               | 12.3 MB
+curl           | 8.9.1   | utils     | Command-line URL transfer tool                   | 1.4 MB
+wget           | 1.24.2  | utils     | Network downloader                              | 0.9 MB
+
+# === v1.2 — Desktop Environment ===
+gnome-shell    | 46.0    | desktop   | GNOME desktop shell (optional)                  | 42.1 MB
+plasma-shell   | 6.1.4   | desktop   | KDE Plasma desktop shell (optional)             | 48.7 MB
+xorg-server    | 21.1.13 | desktop   | X.Org display server                             | 8.4 MB
+wayland        | 1.23.0  | desktop   | Wayland display server protocol                 | 1.8 MB
+pipewire       | 1.2.1   | desktop   | Audio/video server (PipeWire)                   | 3.2 MB
+fontconfig     | 2.15.0  | desktop   | Font configuration library                      | 0.4 MB
+noto-fonts     | 24.8.1  | desktop   | Google Noto font collection                      | 156 MB
+
+# === v1.3 — App Store & AI Native ===
+dxn1-store     | 1.0     | utils     | DXN1-OS app store (GUI package manager)         | 4.6 MB
+dxn1-settings  | 1.0     | utils     | DXN1-OS settings app (system config GUI)        | 3.2 MB
+ollama         | 0.3.14  | ai        | Run LLMs locally (Llama, Mistral, etc.)          | 18.4 MB
+python3        | 3.12.5  | dev       | Python 3 interpreter + pip                      | 28.6 MB
+nodejs         | 22.6.0  | dev       | Node.js JavaScript runtime + npm                | 42.1 MB
+rust           | 1.81.0  | dev       | Rust toolchain (rustc + cargo)                  | 312 MB
+go             | 1.23.0  | dev       | Go programming language                          | 68.4 MB
+docker         | 27.2.0  | dev       | Container runtime (rootless mode)               | 84.2 MB
+
+# === System ===
+linux-firmware | 20240811 | system   | Linux kernel firmware blobs (all vendors)       | 1.2 GB
+mesa           | 24.2.0  | system    | OpenGL/Vulkan graphics drivers                   | 42.8 MB
+openssh        | 9.9p1   | system    | SSH server + client                              | 2.1 MB
+networkmanager | 1.48.0  | system    | Network connection manager (GUI + CLI)          | 8.4 MB

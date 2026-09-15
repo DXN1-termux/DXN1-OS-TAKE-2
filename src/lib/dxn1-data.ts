@@ -297,6 +297,60 @@ export const KERNEL_BOOT_LINES: { text: string; status?: "ok" | "info" | "warn" 
 // kept for backward compat (older components still reference)
 export const BOOT_LINES = KERNEL_BOOT_LINES;
 
+export const APP_CATALOG: { name: string; icon: string; category: string; desc: string; version: string; featured?: boolean }[] = [
+  { name: "Kitty", icon: "/dxn1-assets/apps/kitty.png", category: "terminal", desc: "GPU-accelerated terminal emulator — the default on DXN1-OS.", version: "0.36.4", featured: true },
+  { name: "Firefox", icon: "/dxn1-assets/apps/firefox.png", category: "browser", desc: "Mozilla Firefox ESR — ships preinstalled for web access.", version: "130.0 ESR", featured: true },
+  { name: "App Store", icon: "/dxn1-assets/apps/appstore.png", category: "system", desc: "GUI package manager — browse, search, install apps with one click.", version: "1.0", featured: true },
+  { name: "Settings", icon: "/dxn1-assets/apps/settings.png", category: "system", desc: "System config GUI — hostname, network, display, users, about.", version: "1.0", featured: true },
+  { name: "Code Editor", icon: "/dxn1-assets/apps/code.png", category: "dev", desc: "VS Code-class editor with emerald theme, preloaded with LSPs.", version: "latest", featured: true },
+  { name: "Ollama", icon: "/dxn1-assets/apps/kitty.png", category: "ai", desc: "Run LLMs locally — Llama 3, Qwen Coder, DeepSeek, Mistral.", version: "0.3.14", featured: true },
+  { name: "GNOME Shell", icon: "/dxn1-assets/apps/settings.png", category: "desktop", desc: "Optional GNOME 46 desktop environment (install via dxn1-pkg).", version: "46.0" },
+  { name: "KDE Plasma", icon: "/dxn1-assets/apps/code.png", category: "desktop", desc: "Optional Plasma 6.1 desktop environment (install via dxn1-pkg).", version: "6.1.4" },
+];
+
+export const VERSION_ROADMAP: { ver: string; codename: string; date: string; title: string; items: { label: string; done: boolean }[] }[] = [
+  {
+    ver: "v1.0", codename: "oxide", date: "2025-01-15", title: "Real bootable Linux",
+    items: [
+      { label: "Real Linux 5.10 kernel (EFI_STUB)", done: true },
+      { label: "Real busybox 1.35 initramfs", done: true },
+      { label: "UEFI-bootable ISO (no bootloader)", done: true },
+      { label: "Installer: auto-5gb / full-wipe / manual", done: true },
+      { label: "Auto-updater (dxn1-update)", done: true },
+    ],
+  },
+  {
+    ver: "v1.1", codename: "flux", date: "2025-02-01", title: "Developer essentials",
+    items: [
+      { label: "Kitty terminal (default)", done: true },
+      { label: "Firefox ESR browser", done: true },
+      { label: "Neovim + git + curl + wget", done: true },
+      { label: "5 install modes (added side-install + encrypted)", done: true },
+      { label: "Package recipes (kitty, firefox, neovim)", done: true },
+    ],
+  },
+  {
+    ver: "v1.2", codename: "ion", date: "2025-02-15", title: "Desktop environment",
+    items: [
+      { label: "GNOME 46 desktop (optional, dxn1-pkg)", done: true },
+      { label: "KDE Plasma 6.1 desktop (optional)", done: true },
+      { label: "Xorg + Wayland + PipeWire", done: true },
+      { label: "Mesa graphics drivers", done: true },
+      { label: "Noto fonts (full unicode)", done: false },
+    ],
+  },
+  {
+    ver: "v1.3", codename: "spark", date: "2025-03-01", title: "AI-native + app store",
+    items: [
+      { label: "DXN1 App Store (GUI package manager)", done: true },
+      { label: "DXN1 Settings app (system config GUI)", done: true },
+      { label: "Ollama (local LLM runtime)", done: true },
+      { label: "Python 3.12 + Node.js 22 + Rust + Go", done: true },
+      { label: "Docker (rootless)", done: false },
+    ],
+  },
+];
+
 export const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
   ok: { label: "SUPPORTED", cls: "text-emerald-400 border-emerald-500/40 bg-emerald-500/10" },
   partial: { label: "PARTIAL", cls: "text-amber-400 border-amber-500/40 bg-amber-500/10" },

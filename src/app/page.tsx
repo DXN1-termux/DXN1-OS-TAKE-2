@@ -7,6 +7,7 @@ import Hero from "@/components/dxn1/hero";
 import Features from "@/components/dxn1/features";
 import DownloadCenter from "@/components/dxn1/download-center";
 import InstallerWizard from "@/components/dxn1/installer-wizard";
+import AppShowcase from "@/components/dxn1/app-showcase";
 import DriverMatrix from "@/components/dxn1/driver-matrix";
 import SourceTree from "@/components/dxn1/source-tree";
 import TerminalDemo from "@/components/dxn1/terminal-demo";
@@ -59,6 +60,7 @@ export default function Home() {
         <Features />
         <DownloadCenter os={os} />
         <InstallerWizard />
+        <AppShowcase />
         <DriverMatrix />
         <SourceTree />
         <TerminalDemo />
