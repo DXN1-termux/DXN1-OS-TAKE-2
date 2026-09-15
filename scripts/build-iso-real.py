@@ -53,8 +53,15 @@ def prep_stage():
     # /dxn1/ — distro metadata
     dxn1 = STAGE / "dxn1"
     dxn1.mkdir()
-    (dxn1 / "VERSION").write_text("DXN1-OS 1.0\nbuild 2025.01\narch x86_64\ncodename oxide\n")
+    (dxn1 / "VERSION").write_text("DXN1-OS 1.4\nbuild 2025.03\narch x86_64\ncodename kernel\n")
     shutil.copy(BUSYBOX, dxn1 / "busybox")
+    # /lib/modules/ — kernel modules tarball (extracted on first boot by dxn1-installed-init)
+    modules_tar = BUILD / "modules.tar.gz"
+    if modules_tar.exists():
+        lib_mods = STAGE / "lib" / "modules"
+        lib_mods.mkdir(parents=True)
+        shutil.copy(modules_tar, lib_mods / "MODULES_TARGZ")
+        print(f"[iso] bundled kernel modules ({modules_tar.stat().st_size} bytes)")
     # /boot/grub/grub.cfg — a UEFI grub config (in case someone uses grub to boot)
     grub = STAGE / "boot" / "grub"
     grub.mkdir()

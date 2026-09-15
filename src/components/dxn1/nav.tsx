@@ -6,10 +6,10 @@ import { Download, Terminal, Github, ChevronDown } from "lucide-react";
 const LINKS = [
   { href: "#features", label: "features" },
   { href: "#downloads", label: "downloads" },
+  { href: "/releases", label: "releases" },
   { href: "#install", label: "install" },
   { href: "#apps", label: "apps" },
   { href: "#drivers", label: "drivers" },
-  { href: "#source", label: "source" },
   { href: "#terminal", label: "terminal" },
 ];
 

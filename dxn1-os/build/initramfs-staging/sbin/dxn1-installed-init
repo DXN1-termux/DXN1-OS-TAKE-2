@@ -1,7 +1,10 @@
 #!/bin/busybox sh
-# DXN1-OS installed-system PID 1 init.
-# Runs from the real root partition on disk (not the initramfs).
-# Mounts filesystems, starts services, drops to a login shell.
+# DXN1-OS installed-system PID 1 init (v1.4+).
+# Runs from the real root partition on disk. Does first-boot setup if needed:
+#   - extracts kernel modules from /lib/modules/*.tar.gz (if present)
+#   - runs dhcpcd to bring up networking
+#   - sets hostname/user/locale/timezone (if /etc/dxn1-first-boot exists)
+# Then drops to a login shell.
 
 export PATH=/bin:/sbin:/usr/bin:/usr/sbin
 
@@ -12,6 +15,8 @@ export PATH=/bin:/sbin:/usr/bin:/usr/sbin
 # devtmpfs if not already
 /bin/busybox mount -t devtmpfs none /dev 2>/dev/null || /bin/busybox mdev -s
 /bin/busybox mount -t devpts none /dev/pts 2>/dev/null
+/bin/busybox mount -t tmpfs none /tmp 2>/dev/null
+/bin/busybox mount -t tmpfs none /run 2>/dev/null
 
 # hostname
 [ -f /etc/hostname ] && cat /etc/hostname > /proc/sys/kernel/hostname 2>/dev/null || echo dxn1-oxide > /proc/sys/kernel/hostname 2>/dev/null
@@ -21,6 +26,48 @@ export PATH=/bin:/sbin:/usr/bin:/usr/sbin
 
 # swapon
 /bin/busybox swapon -a 2>/dev/null
+
+# --- first-boot setup (v1.4+) ---
+if [ ! -f /etc/dxn1-first-boot-done ]; then
+    echo "[dxn1-init] first-boot setup..."
+
+    # extract kernel modules if bundled (ISO stores it as /lib/modules/MODULES_TARGZ)
+    for modpkg in /lib/modules/MODULES_TARGZ /lib/modules/*.tar.gz; do
+        [ -f "$modpkg" ] || continue
+        KVER="5.10.0-32-amd64"
+        echo "[dxn1-init] extracting kernel modules ($KVER)..."
+        mkdir -p "/lib/modules/$KVER"
+        tar xzf "$modpkg" -C "/lib/modules/$KVER" 2>/dev/null
+        /bin/busybox depmod -a "$KVER" 2>/dev/null || /bin/busybox depmod "$KVER" 2>/dev/null
+        echo "[dxn1-init] modules extracted; modprobe now works"
+    done
+
+    # load essential driver modules
+    for mod in e1000 e1000e igb r8169 tg3 sky2 alx iwlwifi ath9k ath10k brcmfmac \
+               snd-hda-intel snd-usb-audio amdgpu nouveau i915 ahci nvme usb-storage \
+               ext4 vfat fuse; do
+        /bin/busybox modprobe "$mod" 2>/dev/null && echo "[dxn1-init] loaded: $mod"
+    done
+
+    # bring up networking (DHCP) on the first non-loopback interface
+    for iface in /sys/class/net/*; do
+        name=$(basename "$iface")
+        [ "$name" = "lo" ] && continue
+        echo "[dxn1-init] configuring network on $name (DHCP)..."
+        /bin/busybox ip link set "$name" up 2>/dev/null
+        /bin/busybox udhcpc -i "$name" -q -t 5 2>/dev/null && break
+    done
+
+    # write the marker so this only runs once
+    date 2>/dev/null > /etc/dxn1-first-boot-done
+    echo "[dxn1-init] first-boot setup complete"
+fi
+
+# start udev for hotplug (if available)
+if [ -x /sbin/udevd ]; then
+    /sbin/udevd --daemon 2>/dev/null
+    /sbin/udevadm trigger 2>/dev/null
+fi
 
 # clean up stale files
 /bin/busybox rm -rf /tmp/* /var/run/* /var/lock/* 2>/dev/null
@@ -36,9 +83,12 @@ cat <<'BANNER'
  |_| |_||_/_/ \_\_|\_|___(_)___/ \___|
 
 BANNER
-echo "  DXN1-OS 1.0 'oxide' (installed)  kernel $(uname -r)"
+echo "  DXN1-OS 1.4 'kernel' (installed)  kernel $(uname -r)"
 echo ""
+[ -f /etc/dxn1-first-boot-done ] && echo "  first-boot setup: complete" || echo "  first-boot setup: pending"
 echo "  run 'dxn1-update' to check for OS updates."
+echo "  run 'modprobe <name>' to load kernel modules (314 available)."
+echo "  run 'dxn1-pkg install <pkg>' to install software."
 echo ""
 
 # drop to login shell

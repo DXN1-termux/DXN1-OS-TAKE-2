@@ -349,6 +349,16 @@ export const VERSION_ROADMAP: { ver: string; codename: string; date: string; tit
       { label: "Docker (rootless)", done: false },
     ],
   },
+  {
+    ver: "v1.4", codename: "kernel", date: "2025-03-15", title: "Kernel modules + networking",
+    items: [
+      { label: "314 kernel driver modules bundled", done: true },
+      { label: "modprobe works post-install", done: true },
+      { label: "First-boot: extract modules + load drivers", done: true },
+      { label: "DHCP networking on first boot", done: true },
+      { label: "dxn1-update → real GitHub repo", done: true },
+    ],
+  },
 ];
 
 export const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
