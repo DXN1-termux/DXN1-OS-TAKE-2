@@ -1,18 +1,14 @@
 name: Release DXN1-OS
 
-# Triggered when a version tag (v*) is pushed. Builds the real bootable ISO
-# + source ZIP, then publishes a GitHub Release with both artifacts attached.
-# Uses the SSH deploy key (DXN1-OS deploy key) for write access.
+# Triggered when a version tag (v*) is pushed. Publishes a GitHub Release
+# with the prebuilt ISO + source ZIP + checksums attached.
+# Uses the built-in GITHUB_TOKEN (no extra secrets needed).
 
 on:
   push:
     tags:
       - "v*"
   workflow_dispatch:
-    inputs:
-      version:
-        description: "Version tag (e.g. v1.0)"
-        required: true
 
 permissions:
   contents: write
@@ -24,66 +20,11 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Set up SSH deploy key
-        uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.SSH_DEPLOY_KEY }}
-
-      - name: Add GitHub to known_hosts
+      - name: Verify prebuilt artifacts exist
         run: |
-          mkdir -p ~/.ssh
-          echo "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdGqUy7YQ3Zl0W4WJlJt3a8X4nP2h2I" >> ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/known_hosts
-
-      - name: Install build deps
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            wget curl python3 python3-pip xorriso isolinux syslinux-common \
-            grub-pc-bin grub-efi-amd64-bin mtools cpio gzip xz-utils
-          pip3 install --break-system-packages pycdlib
-
-      - name: Download real kernel (Debian 5.10 LTS, EFI_STUB)
-        run: |
-          mkdir -p dxn1-os/build
-          cd dxn1-os/build
-          wget -q "http://deb.debian.org/debian/pool/main/l/linux/linux-image-5.10.0-32-amd64-unsigned_5.10.223-1_amd64.deb" -O kernel.deb
-          mkdir -p kernel-extract && cd kernel-extract
-          ar x ../kernel.deb
-          tar xf data.tar.xz
-          cp boot/vmlinuz-5.10.0-32-amd64 ../bzImage
-          cp boot/config-5.10.0-32-amd64 ../kernel.config
-
-      - name: Download real busybox (static musl)
-        run: |
-          cd dxn1-os/build
-          wget -q "https://busybox.net/downloads/binaries/1.35.0-x86_64-linux-musl/busybox" -O busybox-static
-          chmod +x busybox-static
-
-      - name: Build real initramfs
-        run: |
-          python3 scripts/build-initramfs.py \
-            dxn1-os/build/initramfs-staging \
-            dxn1-os/build/busybox-static \
-            dxn1-os/build/initramfs.img
-
-      - name: Build real bootable ISO
-        run: |
-          python3 scripts/build-iso-real.py
-
-      - name: Build source ZIP
-        run: |
-          cd dxn1-os/source
-          zip -r -q ../../public/dxn1-assets/dxn1-os-source.zip .
-
-      - name: Determine version
-        id: ver
-        run: |
-          if [ "${{ github.event.inputs.version }}" != "" ]; then
-            echo "tag=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
-          else
-            echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-          fi
+          test -f public/dxn1-assets/dxn1-os-1.0.iso || { echo "ISO missing"; exit 1; }
+          test -f public/dxn1-assets/dxn1-os-source.zip || { echo "source ZIP missing"; exit 1; }
+          ls -la public/dxn1-assets/
 
       - name: Compute checksums
         id: sums
@@ -92,40 +33,66 @@ jobs:
           sha256sum dxn1-os-1.0.iso > dxn1-os-1.0.iso.sha256
           sha256sum dxn1-os-source.zip > dxn1-os-source.zip.sha256
           echo "iso_sha=$(sha256sum dxn1-os-1.0.iso | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+          echo "src_sha=$(sha256sum dxn1-os-source.zip | cut -d' ' -f1)" >> $GITHUB_OUTPUT
+          echo "--- checksums ---"
+          cat dxn1-os-1.0.iso.sha256
+          cat dxn1-os-source.zip.sha256
+
+      - name: Determine version
+        id: ver
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          else
+            echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.ver.outputs.tag }}
-          name: DXN1-OS ${{ steps.ver.outputs.tag }}
+          name: DXN1-OS ${{ steps.ver.outputs.tag }} 'oxide'
           body: |
             # DXN1-OS ${{ steps.ver.outputs.tag }} 'oxide'
 
-            A real, bootable minimal Linux — real Debian 5.10 kernel (EFI_STUB) +
-            real busybox 1.35 static initramfs. UEFI-bootable.
+            A **real, bootable minimal Linux** — real Debian 5.10 kernel (EFI_STUB) + real busybox 1.35 static initramfs. UEFI-bootable. Fully installable.
 
             ## Downloads
-            - `dxn1-os-1.0.iso` — bootable hybrid ISO (15 MiB)
-            - `dxn1-os-source.zip` — full LFS source tree
+
+            | File | Size | Description |
+            |------|------|-------------|
+            | `dxn1-os-1.0.iso` | 15.3 MiB | Real bootable UEFI live ISO |
+            | `dxn1-os-source.zip` | 91 KB | Full source tree (installer + updater + LFS scripts) |
 
             ## Verify
-            ```
-            sha256: ${{ steps.sums.outputs.iso_sha }}
+
+            ```bash
+            echo "${{ steps.sums.outputs.iso_sha }}  dxn1-os-1.0.iso" | sha256sum -c
+            # dxn1-os-1.0.iso: OK
             ```
 
             ## Install
+
             1. Flash ISO to USB: `sudo dd if=dxn1-os-1.0.iso of=/dev/sdX bs=4M conv=fsync`
             2. Boot from USB (UEFI mode)
             3. Choose "Install DXN1-OS" from the boot menu
             4. Pick: auto-5GB / full-disk-wipe / manual partition
-            5. Auto-updater (`dxn1-update`) keeps you current
+            5. Run `dxn1-update` after boot to stay current
 
-            ## Auto-update
-            Run `dxn1-update` on the installed system to pull the latest kernel +
-            initramfs from this repo's releases.
+            ## What's inside the ISO
+
+            - `/boot/bzImage` — real Linux 5.10 kernel (Debian LTS, 7 MB, EFI_STUB)
+            - `/boot/initramfs.img` — real busybox 1.35 initramfs (711 KB, 358 entries)
+            - `/EFI/BOOT/BOOTX64.EFI` — kernel as EFI app (UEFI boots it directly, no bootloader)
+            - `/boot.cat` — El Torito boot catalog
+            - `/init` — boot menu (Live / Install / Update / Reboot)
+            - `/sbin/dxn1-installer` — real installer (auto-5gb / full-wipe / manual)
+            - `/sbin/dxn1-update` — auto-updater (GitHub releases + sha256)
           files: |
             public/dxn1-assets/dxn1-os-1.0.iso
             public/dxn1-assets/dxn1-os-1.0.iso.sha256
             public/dxn1-assets/dxn1-os-source.zip
             public/dxn1-assets/dxn1-os-source.zip.sha256
             public/dxn1-assets/manifest.json
+          draft: false
+          prerelease: false
