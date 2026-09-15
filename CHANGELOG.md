@@ -35,6 +35,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `scripts/build-iso-real.py` — pycdlib ISO9660 + Rock Ridge + El Torito assembler (no `xorriso` needed).
 - `scripts/gen-deploy-key.py` — OpenSSH ed25519 deploy key generator (no `ssh-keygen` needed).
 
+## [1.3] — 2025-03-01 'spark'
+
+### Added
+- **DXN1 App Store** (`dxn1-store`) — GUI package manager (Python/Tkinter) wrapping `dxn1-pkg`. Browse, search, install, remove.
+- **DXN1 Settings app** (`dxn1-settings`) — system config GUI (System/Network/Display/Users/About tabs).
+- **Ollama** package recipe — run LLMs locally (Llama 3, Qwen Coder, DeepSeek). AI-native dev.
+- **Package repository index** — 28 version-pinned packages (system/terminal/browser/desktop/dev/ai).
+- App icons + desktop mockup generated via AI image generation.
+
+## [1.2] — 2025-02-15 'ion'
+
+### Added
+- **GNOME 46 desktop** recipe — optional, `dxn1-pkg install gnome-shell`. 13 components + gdm service.
+- **KDE Plasma 6.1 desktop** recipe — optional, `dxn1-pkg install plasma-shell`. 11 components + sddm service.
+- v1.2 wallpaper (dark futuristic desktop with emerald circuit accents).
+
+## [1.1] — 2025-02-01 'flux'
+
+### Added
+- **Kitty terminal** recipe — GPU-accelerated terminal, default on DXN1-OS.
+- **Firefox ESR 130** recipe — Mozilla Firefox, ships preinstalled.
+- **2 new install modes**: `side-install` (dual-boot alongside Windows/macOS, shrinks existing partition + GRUB menu), `encrypted` (full-disk LUKS + passphrase at boot).
+- Installer now offers 5 modes: auto-5gb / full-wipe / manual / side-install / encrypted.
+- All recipes syntax-checked with real busybox.
+
 ## [Unreleased]
 
 ### Planned
