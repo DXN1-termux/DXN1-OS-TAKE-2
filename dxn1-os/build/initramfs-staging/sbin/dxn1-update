@@ -20,7 +20,7 @@ export PATH=/bin:/sbin:/usr/bin:/usr/sbin
 REPO="DXN1-termux/DXN1-OS-TAKE-2"        # the real GitHub repo
 API="https://api.github.com/repos/${REPO}/releases/latest"
 DL_BASE="https://github.com/${REPO}/releases/latest/download"
-CURRENT_VERSION="1.4"
+CURRENT_VERSION="1.5"
 STATE_DIR="/var/lib/dxn1-update"
 mkdir -p "$STATE_DIR" 2>/dev/null
 

@@ -359,6 +359,16 @@ export const VERSION_ROADMAP: { ver: string; codename: string; date: string; tit
       { label: "dxn1-update → real GitHub repo", done: true },
     ],
   },
+  {
+    ver: "v1.5", codename: "spark-2", date: "2025-03-22", title: "First-boot user setup",
+    items: [
+      { label: "dxn1-setup: interactive user creation", done: true },
+      { label: "hostname / timezone / locale config", done: true },
+      { label: "Home skeleton + user groups (wheel/input/video)", done: true },
+      { label: "Root password setup", done: true },
+      { label: "Auto-runs on first boot", done: true },
+    ],
+  },
 ];
 
 export const STATUS_BADGE: Record<string, { label: string; cls: string }> = {

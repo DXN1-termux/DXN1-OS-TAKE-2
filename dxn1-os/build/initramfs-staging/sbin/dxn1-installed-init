@@ -27,7 +27,7 @@ export PATH=/bin:/sbin:/usr/bin:/usr/sbin
 # swapon
 /bin/busybox swapon -a 2>/dev/null
 
-# --- first-boot setup (v1.4+) ---
+# --- first-boot setup (v1.4+: modules + networking; v1.5+: user setup) ---
 if [ ! -f /etc/dxn1-first-boot-done ]; then
     echo "[dxn1-init] first-boot setup..."
 
@@ -58,9 +58,15 @@ if [ ! -f /etc/dxn1-first-boot-done ]; then
         /bin/busybox udhcpc -i "$name" -q -t 5 2>/dev/null && break
     done
 
-    # write the marker so this only runs once
-    date 2>/dev/null > /etc/dxn1-first-boot-done
-    echo "[dxn1-init] first-boot setup complete"
+    # v1.5+: run interactive user setup (creates user, sets hostname/tz/locale)
+    if [ -x /sbin/dxn1-setup ]; then
+        echo "[dxn1-init] launching first-boot user setup..."
+        /sbin/dxn1-setup
+    else
+        # write the marker so this only runs once
+        date 2>/dev/null > /etc/dxn1-first-boot-done
+        echo "[dxn1-init] first-boot setup complete"
+    fi
 fi
 
 # start udev for hotplug (if available)

@@ -14,6 +14,20 @@ type Release = {
 
 const RELEASES: Release[] = [
   {
+    ver: "v1.5",
+    codename: "spark-2",
+    date: "2025-03-22",
+    title: "First-boot user setup",
+    iso_sha: "6589de0dc02349dd955ae64d790a652af7fed3df793f5494f481fc858a9dd744",
+    iso_size: "29.1 MiB",
+    highlights: [
+      "Interactive first-boot setup (dxn1-setup): create user, set hostname, timezone, locale, root password",
+      "8 common timezones pre-listed (UTC, NY, London, Amsterdam, Berlin, Tokyo, Kolkata, Sydney)",
+      "Creates home skeleton (~/.config, ~/Desktop, ~/Documents), adds user to wheel/input/video/audio groups",
+      "Runs automatically on first boot of the installed system (after modules + networking)",
+    ],
+  },
+  {
     ver: "v1.4",
     codename: "kernel",
     date: "2025-03-15",
@@ -89,7 +103,7 @@ const RELEASES: Release[] = [
 const GITHUB_BASE = "https://github.com/DXN1-termux/DXN1-OS-TAKE-2/releases/download";
 
 export default function ReleasesPage() {
-  const latest = "v1.4";
+  const latest = "v1.5";
 
   return (
     <div className="min-h-screen dxn1-surface pt-16">
