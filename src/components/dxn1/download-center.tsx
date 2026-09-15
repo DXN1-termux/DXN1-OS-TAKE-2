@@ -29,9 +29,9 @@ type Method = "usb" | "drivedroid" | "vm" | "partition";
 type Mirror = { id: string; label: string; url: string; loc: string; speed: string };
 
 const MIRRORS: Mirror[] = [
-  { id: "gh", label: "GitHub Releases", url: "https://github.com/DXN1-termux/DXN1-OS-TAKE-2/releases/latest/download/dxn1-os-1.0.iso", loc: "Global CDN", speed: "Fast" },
-  { id: "eu", label: "EU Mirror", url: "https://eu.mirror.dxn1.os/dxn1-os-1.0.iso", loc: "Frankfurt, DE", speed: "Fast" },
-  { id: "us", label: "US Mirror", url: "https://us.mirror.dxn1.os/dxn1-os-1.0.iso", loc: "Ashburn, VA", speed: "Fast" },
+  { id: "gh", label: "GitHub Release", url: "https://github.com/DXN1-termux/DXN1-OS-TAKE-2/releases/download/v1.0/dxn1-os-1.0.iso", loc: "Global CDN", speed: "Fast" },
+  { id: "raw", label: "GitHub Raw", url: "https://raw.githubusercontent.com/DXN1-termux/DXN1-OS-TAKE-2/main/public/dxn1-assets/dxn1-os-1.0.iso", loc: "Global", speed: "Fast" },
+  { id: "local", label: "This server", url: "/api/download/iso", loc: "Local mirror", speed: "Fast" },
   { id: "src", label: "Build from source", url: "/api/download/source", loc: "Local", speed: "Instant" },
 ];
 
