@@ -52,3 +52,15 @@ prompt
 server.log
 # Skills directory
 /skills/
+
+# DXN1-OS build artifacts — large, regenerable, don't commit
+dxn1-os/build/kernel.deb
+dxn1-os/build/kernel-extract/
+dxn1-os/build/syslinux-6.03/
+dxn1-os/build/syslinux.tar.xz
+dxn1-os/build/*.img
+# keep: initramfs-staging/ (source), busybox-static (small), kernel-min.config
+
+# SSH deploy key — NEVER commit the private key
+dxn1-os/deploy_key
+# keep: deploy_key.pub, known_hosts (safe to commit)
