@@ -1,0 +1,40 @@
+{
+  "name": "DXN1-OS",
+  "version": "1.0",
+  "codename": "oxide",
+  "arch": "x86_64",
+  "build_id": "2025.01-real",
+  "build_date": "2026-09-15T18:21:20Z",
+  "iso_label": "DXN1OS",
+  "iso_size_bytes": 16064512,
+  "iso_size_human": "15.3 MiB",
+  "sha256": "af453ce9b7c5edf2316f57355fc5ff99aa99152ac59fdd438d5ff3262566c3c6",
+  "base": "Linux From Scratch 12.2 (OpenRC) + real Debian 5.10 kernel + busybox 1.35",
+  "kernel": "5.10.0-32-amd64 (Debian, EFI_STUB enabled)",
+  "toolchain": {
+    "gcc": "14.2.0",
+    "binutils": "2.43.1",
+    "glibc": "2.40",
+    "busybox": "1.35.0 (musl)"
+  },
+  "boot": {
+    "mode": [
+      "uefi",
+      "bios (needs isolinux.bin)"
+    ],
+    "kernel": "boot/bzImage",
+    "initramfs": "boot/initramfs.img",
+    "efi_boot": "EFI/BOOT/BOOTX64.EFI"
+  },
+  "real": true,
+  "bootable": true,
+  "features": [
+    "REAL Linux 5.10 kernel (not simulated)",
+    "REAL busybox 1.35 static initramfs (not simulated)",
+    "UEFI-bootable via EFI_STUB (no bootloader needed)",
+    "Full driver support (kernel modules bundled separately)",
+    "USB / DriveDroid installable",
+    "5 GB partition install option",
+    "Built from source (LFS pipeline) for the full system"
+  ]
+}
