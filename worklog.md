@@ -236,3 +236,26 @@ Stage Summary:
 - GITHUB RELEASES: push `git tag v1.0 && git push origin v1.0` → the release.yml workflow builds + publishes a Release with the ISO + source ZIP + checksums attached.
 - CONSTRAINT (unchanged): 4GB sandbox RAM can't run dev server + headless Chromium simultaneously; verified via curl + SSR HTML + direct ISO/initramfs inspection.
 
+
+---
+Task ID: 10 (user: "added the ssh key push to gh and make the tag ofc containing latest iso")
+Agent: main (DXN1 lead engineer)
+Task: Push DXN1-OS to GitHub with the deploy key, create the v1.0 tag containing the latest real bootable ISO, and prepare a GitHub release with the ISO attached.
+
+Work Log:
+- Inspected git state: working tree clean, latest commit db89904 already contains the real ISO (sha256 3f965f38...), installer, updater, deploy key, and release workflow. No remote configured.
+- Verified the deploy key (OpenSSH ed25519) is present and correct: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEaBfP8eP/0KP5ofTldwwwGQ30ojpaDAP6QPLSA7QbTY dxn1-os-deploy@github
+- Confirmed GitHub API is reachable from the sandbox (api.github.com → HTTP 200).
+- Discovered constraints: no `ssh` binary, no `gh` CLI, no GitHub token in env — so I CANNOT create the repo or push from inside the sandbox. This is the one step that must run on the user's machine.
+- Configured ~/.ssh/config to use the deploy key for github.com, added GitHub host keys to known_hosts, copied the private key to ~/.ssh/dxn1_deploy_key (0600). Ready for the user's machine.
+- Wrote dxn1-os/RELEASE_NOTES_v1.0.md: full release notes (downloads, sha256 verification, ISO contents, boot menu, installer modes, auto-updater, install instructions, build-from-source).
+- Created the annotated git tag v1.0 on the latest commit (1aee1b0) with full release notes in the tag message. Verified the tag's tree contains: public/dxn1-assets/dxn1-os-1.0.iso (16,072,704 bytes), .github/workflows/release.yml, dxn1-os/deploy_key + .pub, dxn1-os/build/initramfs-staging/sbin/dxn1-installer + dxn1-update. Verified git show v1.0:public/dxn1-assets/dxn1-os-1.0.iso | sha256sum = 3f965f38... (matches the real file).
+- Wrote scripts/push-to-github.sh: a complete one-command push script. Steps: (1) verify deploy key works (ssh -T git@github.com), (2) add remote origin, (3) push main, (4) push v1.0 tag, (5) create the GitHub release with ISO + source ZIP + checksums attached (via gh CLI if available, else GitHub API with $GITHUB_TOKEN). Made executable.
+- Bundled all release artifacts at /tmp/dxn1-release-v1.0/ (dxn1-os-1.0.iso, .sha256, dxn1-os-source.zip, manifest.json, RELEASE_NOTES_v1.0.md) for easy manual upload if needed.
+- Restarted dev server (was down from OOM in prior cron run); confirmed HTTP 200.
+
+Stage Summary:
+- v1.0 tag created locally, containing the latest real bootable ISO (15.3 MiB, sha256 3f965f38774dd76fd5d18e45297012a663a8d0c3e750eaaff5529ec971d4c7e4), the full source tree, the deploy key, and the release workflow.
+- Everything is staged for the user to push in one command: `GH_USER=<your-github-username> bash scripts/push-to-github.sh`.
+- CONSTRAINT: the sandbox has no ssh/gh/token, so the actual push must be done by the user on their machine. The push script + deploy key + tag + ISO are all ready.
+
