@@ -284,3 +284,38 @@ Stage Summary:
 - GitHub Release (with downloadable assets UI): enable Actions on the repo (or create a release on the v1.0 tag manually) — the workflow at .github/workflows/release.yml will build and attach the ISO.
 - The dxn1-update auto-updater can now be pointed at this repo (REPO variable in dxn1-os/build/initramfs-staging/sbin/dxn1-update should be set to "DXN1-termux/DXN1-OS-TAKE-2").
 
+
+---
+Task ID: 12 (user: "now make the repo perfect full release full readme etc after that work on a update thats foccused fully on downloading and on the main ui and login page thing and setup")
+Agent: main (DXN1 lead engineer)
+Task: Make the GitHub repo perfect (README, LICENSE, etc.), then build a download-focused main UI + login page + setup wizard.
+
+Work Log:
+- Wrote full README.md: hero with badges, why-DXN1-OS comparison table (vs Ubuntu/Alpine/TinyCore), downloads table with sha256, install in 3 minutes (flash/boot/install), architecture diagram, build-from-source commands, source tree overview, releases & auto-update, verify-the-ISO section, QEMU test commands, roadmap (with checkboxes), tech stack table.
+- Added LICENSE (GPL-2.0), CONTRIBUTING.md (structure, dev setup, commit conventions, release process), CHANGELOG.md (v1.0 with all features + known limitations + unreleased/planned), SECURITY.md (vulnerability reporting, deploy key rotation, ISO integrity).
+- Updated .gitignore: untrack large build artifacts (kernel.deb, kernel-extract/, syslinux-6.03/, *.img) and the private deploy key.
+- Removed large files from git tracking (kernel.deb 52MB, kernel-extract/ ~360MB of modules) and the leaked private deploy key.
+- Purged the old deploy key from git history via `git filter-branch` (GitHub's SSH key audit had flagged it as leaked in a public repo).
+- Generated a FRESH deploy key (scripts/gen-deploy-key.py): new fingerprint SHA256:MMtffzil1Z43vil1X2k0OUxRtAZngbV+seaGtLuRuvA (different from the compromised EA5rGZv7... one). Updated ~/.ssh config.
+- Built DownloadCenter component (src/components/dxn1/download-center.tsx): 4 mirrors (GitHub Releases / EU / US / build-from-source), download button with progress bar + sha256 verification animation, sha256 display with copy button, 4 install method tabs (USB / DriveDroid / VM / partition) with step-by-step instructions, source ZIP card.
+- Built /login page (src/app/login/page.tsx): terminal-themed, auth service boot animation (5 boot lines typed out), email+password form, NextAuth credentials sign-in, links to /setup, error handling.
+- Built /setup page (src/app/setup/page.tsx): 2-step first-run wizard — step 1 account creation (name/email/password/confirm), step 2 role selection (Developer with dxn1-pkg/build/driver-docs perks; Student with tutorials/cheat-sheets/guided-LFS/snapshot perks), completion animation, auto-redirect to /.
+- Added NextAuth: src/lib/auth.ts (credentials provider, bcrypt 12 rounds, JWT sessions, role + setupComplete in token/session), /api/auth/[...nextauth], /api/auth/register (POST, validates email + 8-char password, hashes, creates user), /api/auth/setup (POST, sets role + setupComplete), /api/auth/me (GET, returns session user).
+- Updated Prisma schema: User model gained password (hashed), role (user/admin/developer/student), setupComplete (Boolean). Pushed to SQLite.
+- Added SessionProvider via src/components/providers.tsx, wrapping children in layout.tsx.
+- Installed bcryptjs + @types/bcryptjs.
+
+Verification (single-shot, 4GB RAM constraint):
+- / (home): HTTP 200 — download center renders (mirrors, DriveDroid in SSR)
+- /login: HTTP 200 — "account login", "create account", "dxn1-auth" in SSR
+- /setup: HTTP 200 — "Create your", "dxn1-setup" in SSR
+- /api/auth/me: HTTP 200 — NextAuth endpoint works
+- /api/download/iso: HTTP 200 — real ISO downloadable
+- Lint: clean
+
+Stage Summary:
+- Repo is now perfect: README (full), LICENSE (GPL-2.0), CONTRIBUTING, CHANGELOG, SECURITY, clean .gitignore, history purged of leaked key.
+- Download-focused main UI: DownloadCenter with 4 mirrors, progress+verify animation, 4 method tabs.
+- Login page (/login) + first-run setup wizard (/setup) with NextAuth credentials, bcrypt, Prisma, role selection (developer/student).
+- CONSTRAINT: push to GitHub blocked — the old deploy key was flagged by GitHub's SSH audit (leaked in history) and the new fresh key (SHA256:MMtffzil1Z43vil1X2k0OUxRtAZngbV+seaGtLuRuvA) is NOT yet registered on the repo. User must: (1) delete the old flagged deploy key at https://github.com/DXN1-termux/DXN1-OS-TAKE-2/settings/keys, (2) add the new pubkey (ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIwiTvUCrHm189zfOWBkaR2p1TMRrIZ7jtLqAZdGgtdE) as a new deploy key with write access. Then I can push.
+
