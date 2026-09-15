@@ -259,3 +259,28 @@ Stage Summary:
 - Everything is staged for the user to push in one command: `GH_USER=<your-github-username> bash scripts/push-to-github.sh`.
 - CONSTRAINT: the sandbox has no ssh/gh/token, so the actual push must be done by the user on their machine. The push script + deploy key + tag + ISO are all ready.
 
+
+---
+Task ID: 11 (user: "repo is called https://github.com/DXN1-termux/DXN1-OS-TAKE-2")
+Agent: main (DXN1 lead engineer)
+Task: Push DXN1-OS to GitHub at DXN1-termux/DXN1-OS-TAKE-2 with the deploy key, including the v1.0 tag containing the latest real bootable ISO.
+
+Work Log:
+- Installed paramiko (Python SSH2 library) since no `ssh` binary exists in the sandbox. Confirmed deploy key authenticates against git@github.com:22.
+- Tested git-upload-pack access to '/DXN1-termux/DXN1-OS-TAKE-2.git' via paramiko — got the capabilities advertisement, proving the deploy key is registered on the repo with read access.
+- Wrote /home/z/dxn1-git-ssh.py: a git SSH transport wrapper using paramiko with dedicated threads for stdin/stdout/stderr and proper EOF signaling (first version had a data-corruption bug from non-blocking reads that mangled the pack → "inflate: data stream error"; fixed with blocking read1() + shutdown_write).
+- Set GIT_SSH_COMMAND=/home/z/dxn1-git-ssh.py and tested `git ls-remote` → success (exit 0).
+- `git remote add origin git@github.com:DXN1-termux/DXN1-OS-TAKE-2.git`
+- `git push -u origin main` → SUCCESS. Main branch (b6dbc1cb) pushed, including the real bootable ISO at public/dxn1-assets/dxn1-os-1.0.iso. GitHub warned about large files (kernel.deb 52MB > 50MB soft limit) but accepted the push.
+- `git push origin v1.0` → SUCCESS. Tag v1.0 (7e65322d) pushed.
+- Verified via ls-remote: refs/heads/main and refs/tags/v1.0 both present on GitHub.
+- Verified the ISO is directly downloadable: curl -sI https://raw.githubusercontent.com/DXN1-termux/DXN1-OS-TAKE-2/main/public/dxn1-assets/dxn1-os-1.0.iso → HTTP 200, application/octet-stream.
+- GitHub Release creation via REST API needs a Personal Access Token (deploy keys only authenticate git-over-SSH, not the API). The .github/workflows/release.yml workflow is in the repo — when the user enables GitHub Actions on the repo (Actions tab → "I understand my workflows, go ahead and enable them"), the workflow will run on the v1.0 tag and publish a proper GitHub Release with the ISO + source ZIP + checksums attached. Alternatively the user can create a release manually from the web UI on the v1.0 tag.
+
+Stage Summary:
+- PUSHED TO GITHUB. Repo: https://github.com/DXN1-termux/DXN1-OS-TAKE-2
+- Main branch + v1.0 tag both live, containing the real bootable ISO (15.3 MiB, sha256 3f965f38...), installer, updater, deploy key, source tree, release workflow.
+- ISO is directly downloadable: https://raw.githubusercontent.com/DXN1-termux/DXN1-OS-TAKE-2/main/public/dxn1-assets/dxn1-os-1.0.iso
+- GitHub Release (with downloadable assets UI): enable Actions on the repo (or create a release on the v1.0 tag manually) — the workflow at .github/workflows/release.yml will build and attach the ISO.
+- The dxn1-update auto-updater can now be pointed at this repo (REPO variable in dxn1-os/build/initramfs-staging/sbin/dxn1-update should be set to "DXN1-termux/DXN1-OS-TAKE-2").
+
