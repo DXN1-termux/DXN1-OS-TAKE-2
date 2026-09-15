@@ -1,0 +1,69 @@
+#!/bin/bash
+# =============================================================================
+# DXN1-OS — sshd service
+# -----------------------------------------------------------------------------
+# Manages the OpenSSH sshd lifecycle. Generates host keys on first start if
+# they don't exist.
+# =============================================================================
+set -u
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+PIDFILE=/run/sshd.pid
+SSHDIR=/etc/ssh
+
+gen_keys() {
+    mkdir -p "${SSHDIR}"
+    for ktype in rsa ecdsa ed25519; do
+        key="${SSHDIR}/ssh_host_${ktype}_key"
+        if [[ ! -s "${key}" ]]; then
+            ssh-keygen -q -t "${ktype}" -N "" -f "${key}"
+            chmod 0600 "${key}"
+            chmod 0644 "${key}.pub"
+        fi
+    done
+}
+
+start() {
+    gen_keys
+    if [[ -f "${PIDFILE}" ]] && kill -0 "$(cat "${PIDFILE}")" 2>/dev/null; then
+        return 0
+    fi
+    /usr/sbin/sshd
+    return $?
+}
+
+stop() {
+    if [[ -f "${PIDFILE}" ]]; then
+        kill -TERM "$(cat "${PIDFILE}")" 2>/dev/null || true
+        rm -f "${PIDFILE}"
+    fi
+    pkill -x sshd 2>/dev/null || true
+    return 0
+}
+
+restart() { stop; sleep 1; start; }
+
+status() {
+    if [[ -f "${PIDFILE}" ]] && kill -0 "$(cat "${PIDFILE}")" 2>/dev/null; then
+        return 0
+    fi
+    pgrep -x sshd >/dev/null 2>&1
+}
+
+case "${1:-start}" in
+    start)   start ;;
+    stop)    stop  ;;
+    restart) restart ;;
+    status)
+        if status; then
+            echo "sshd: running ($(cat "${PIDFILE}" 2>/dev/null || echo unknown))"
+            exit 0
+        else
+            echo "sshd: stopped"
+            exit 3
+        fi
+        ;;
+    *)
+        echo "usage: $0 {start|stop|restart|status}" >&2
+        exit 2
+        ;;
+esac

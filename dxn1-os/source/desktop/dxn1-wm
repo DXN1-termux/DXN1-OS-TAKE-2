@@ -1,0 +1,154 @@
+#!/bin/bash
+# =============================================================================
+# dxn1-wm — minimal tiling window manager launcher
+# -----------------------------------------------------------------------------
+# Launches a tiny Xorg session with a hand-rolled "tiling" WM built out of
+# xdotool, xrandr, and a small awk-based event loop reading from xev. This is
+# *not* a full WM — it gives you:
+#
+#   * Mod4 + Enter    → spawn terminal (alacritty if present, xterm otherwise)
+#   * Mod4 + 1..9     → switch virtual desktop
+#   * Mod4 + J/K      → focus next/prev window
+#   * Mod4 + H/L      → shrink/grow master area
+#   * Mod4 + Space     → next layout (tiled / monocle)
+#   * Mod4 + Q         → close focused window
+#   * Mod4 + Shift+Q   → exit the session
+#
+# Requires: xorg-server, xdotool, xrandr, xev, xterm|alacritty, xsetroot.
+# =============================================================================
+set -euo pipefail
+
+WM_LOG="${HOME}/.dxn1-wm.log"
+MOD="Mod4"
+
+# Pick a terminal.
+if   command -v alacritty >/dev/null 2>&1; then TERM_CMD=alacritty
+elif command -v xterm     >/dev/null 2>&1; then TERM_CMD=xterm
+elif command -v foot      >/dev/null 2>&1; then TERM_CMD=foot
+else echo "dxn1-wm: no terminal emulator found" >&2; exit 1; fi
+
+# Pick a launcher.
+if   command -v rofi       >/dev/null 2>&1; then LAUNCHER=(rofi -show run)
+elif command -v dmenu_run  >/dev/null 2>&1; then LAUNCHER=(dmenu_run)
+else LAUNCHER=(true)  # no-op
+fi
+
+# ----------------------------------------------------------------------------
+# Start the X server if we're not already inside one.
+# ----------------------------------------------------------------------------
+if [[ -z "${DISPLAY:-}" ]]; then
+    # Find a free display number.
+    D=0
+    while [[ -e /tmp/.X${D}-lock ]]; do D=$((D+1)); done
+    export DISPLAY=":${D}"
+    exec xinit "${BASH_SOURCE[0]}" -- /usr/bin/X "${DISPLAY}" vt7 -nolisten tcp \
+        >/dev/null 2>&1
+fi
+
+log() { printf '[dxn1-wm] %s\n' "$*" >> "${WM_LOG}"; }
+log "starting on DISPLAY=${DISPLAY} (TERM=${TERM_CMD})"
+
+# ----------------------------------------------------------------------------
+# Apply a sensible default X setup.
+# ----------------------------------------------------------------------------
+xsetroot -cursor_name left_ptr -solid "#0b0e14" 2>/dev/null || true
+xset r rate 250 50   2>/dev/null || true
+xset s off           2>/dev/null || true
+xset dpms 600 600 600 2>/dev/null || true
+xrandr --auto 2>/dev/null || true
+setxkbmap -option terminate:ctrl_alt_bksp 2>/dev/null || true
+
+# ----------------------------------------------------------------------------
+# State.
+# ----------------------------------------------------------------------------
+NUM_DESKTOPS=9
+CURRENT_DESKTOP=1
+declare -a WINDOWS=()           # ordered list of window IDs on current desktop
+MASTER_RATIO=55                  # percentage of screen for the master window
+
+# ----------------------------------------------------------------------------
+# Helpers.
+# ----------------------------------------------------------------------------
+get_focused()    { xdotool getactivewindow 2>/dev/null || echo ""; }
+
+focus_window()   { local w="$1"; [[ -n "${w}" ]] && xdotool windowactivate "${w}" 2>/dev/null || true; }
+
+close_window()   { local w; w=$(get_focused); [[ -n "${w}" ]] && xdotool windowclose "${w}" 2>/dev/null || true; }
+
+spawn_terminal() { ${TERM_CMD} & }
+
+retiling_layout() {
+    local count=${#WINDOWS[@]}
+    [[ ${count} -eq 0 ]] && return 0
+    local screen_w screen_h master_w stack_w
+    screen_w=$(xrandr 2>/dev/null | awk '/\*+/ {print $1; exit}' | cut -d'x' -f1)
+    screen_h=$(xrandr 2>/dev/null | awk '/\*+/ {print $1; exit}' | cut -d'x' -f2)
+    screen_w=${screen_w:-1280}; screen_h=${screen_h:-800}
+    if [[ ${count} -eq 1 ]] || [[ "${LAYOUT:-tile}" == "monocle" ]]; then
+        for w in "${WINDOWS[@]}"; do
+            xdotool windowmove "${w}" 0 0
+            xdotool windowsize "${w}" "${screen_w}" "${screen_h}"
+        done
+        return 0
+    fi
+    master_w=$(( screen_w * MASTER_RATIO / 100 ))
+    stack_w=$(( screen_w - master_w - 6 ))
+    stack_h=$(( screen_h / (count - 1) ))
+    # Master window left half.
+    xdotool windowmove "${WINDOWS[0]}" 0 0
+    xdotool windowsize "${WINDOWS[0]}" "${master_w}" "${screen_h}"
+    # Stack on the right.
+    for ((i=1; i<count; i++)); do
+        local y=$(( (i - 1) * stack_h ))
+        xdotool windowmove "${WINDOWS[$i]}" $(( master_w + 6 )) "${y}"
+        xdotool windowsize "${WINDOWS[$i]}" "${stack_w}" "${stack_h}"
+    done
+}
+
+# ----------------------------------------------------------------------------
+# Keybindings via xbindkeys-style hotkey capture using xev. We start xev on
+# the root window in a pipe and react to keypress events.
+# ----------------------------------------------------------------------------
+mkfifo /tmp/.dxn1-wm-events.$$ 2>/dev/null || true
+trap 'rm -f /tmp/.dxn1-wm-events.$$; pkill -P $$; exit 0' INT TERM EXIT
+
+xev -root -event keyboard > /tmp/.dxn1-wm-events.$$ 2>/dev/null &
+XEV_PID=$!
+
+# Seed the window list.
+mapfile -t WINDOWS < <(xdotool search --onlyvisible --class "" 2>/dev/null || true)
+
+log "entering event loop…"
+while read -r line; do
+    # xev output is multi-line per event; we look for keypress lines.
+    [[ "${line}" == *KeyPress* ]] || continue
+    keysym=$(echo "${line}" | grep -oE 'keysym 0x[0-9a-f]+, [a-zA-Z_0-9]+' | awk '{print $3}')
+
+    case "${keysym}" in
+        Return)    spawn_terminal ;;
+        space)     if [[ "${LAYOUT:-tile}" == "tile" ]]; then LAYOUT=monocle; else LAYOUT=tile; fi; retiling_layout ;;
+        q)         close_window ;;
+        Q|Shift_L) log "exiting by user request"; break ;;
+        j)         # focus next
+            local cur; cur=$(get_focused)
+            local idx=0
+            for i in "${!WINDOWS[@]}"; do [[ "${WINDOWS[$i]}" == "${cur}" ]] && idx=$i; done
+            idx=$(( (idx + 1) % ${#WINDOWS[@]} ))
+            focus_window "${WINDOWS[$idx]}" ;;
+        k)         # focus prev
+            local cur; cur=$(get_focused)
+            local idx=0
+            for i in "${!WINDOWS[@]}"; do [[ "${WINDOWS[$i]}" == "${cur}" ]] && idx=$i; done
+            idx=$(( (idx - 1 + ${#WINDOWS[@]}) % ${#WINDOWS[@]} ))
+            focus_window "${WINDOWS[$idx]}" ;;
+        h)         MASTER_RATIO=$(( MASTER_RATIO > 10 ? MASTER_RATIO - 5 : MASTER_RATIO )); retiling_layout ;;
+        l)         MASTER_RATIO=$(( MASTER_RATIO < 90 ? MASTER_RATIO + 5 : MASTER_RATIO )); retiling_layout ;;
+        1|2|3|4|5|6|7|8|9)
+            CURRENT_DESKTOP=${keysym}
+            log "switched to desktop ${CURRENT_DESKTOP}"
+            # Crude per-desktop filter: hide every window, show ones tagged.
+            xdotool search --onlyvisible "" set_desktop_for_window "%@" "${CURRENT_DESKTOP}" 2>/dev/null || true ;;
+    esac
+done < /tmp/.dxn1-wm-events.$$
+
+log "session ended cleanly"

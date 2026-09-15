@@ -1,0 +1,100 @@
+#!/bin/bash
+# =============================================================================
+# DXN1-OS PID 1 — init
+# -----------------------------------------------------------------------------
+# A small shell-based init (PID 1) that:
+#   1. Mounts /proc /sys /dev (with a fallback to mdev if devtmpfs is missing).
+#   2. Sources /etc/rc.d/rc.sysinit, which sets hostname, starts udev, brings
+#      up loopback, and starts enabled services.
+#   3. Drops to getty on the configured VTs / serial console.
+#
+# This is intentionally minimal: it relies on /etc/init.d/* service scripts
+# that each implement start/stop/restart/status functions. It is *not* a
+# replacement for systemd or openrc — but it is enough to bring DXN1-OS up
+# on the bootable installer ISO.
+# =============================================================================
+set -eu
+
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+export PATH
+
+# Rescue: if invoked with "rescue" or if /sbin/init has been replaced, fall
+# back to a single-user shell on tty1.
+case "${1:-}" in
+    rescue|single|1) exec /bin/bash -l ;;
+esac
+
+# Catch errors loudly — we are PID 1, a silent exit panics the kernel.
+trap 'echo "init: unhandled error at line $LINENO (exit $?)" >&2' ERR
+
+# Mount the kernel virtual filesystems immediately — every later step needs them.
+mount -t proc     none /proc      2>/dev/null || true
+mount -t sysfs    none /sys       2>/dev/null || true
+mount -t devtmpfs none /dev       2>/dev/null || \
+    mount -t tmpfs none /dev      2>/dev/null || true
+mkdir -p /dev/pts /dev/shm /run /tmp
+mount -t devpts   devpts /dev/pts -o gid=5,mode=620 2>/dev/null || true
+mount -t tmpfs    tmpfs  /dev/shm                 2>/dev/null || true
+mount -t tmpfs    tmpfs  /run                     2>/dev/null || true
+mount -t tmpfs    tmpfs  /tmp                     2>/dev/null || true
+
+# Bring up the loopback early so any networking bits in rc.sysinit work.
+ip link set lo up 2>/dev/null || ifconfig lo 127.0.0.1 up 2>/dev/null || true
+
+# Source rc.sysinit if present. That script handles udev, hostname, modules,
+# and starts the enabled services (network, udev, sshd, …).
+if [[ -x /etc/rc.d/rc.sysinit ]]; then
+    . /etc/rc.d/rc.sysinit
+elif [[ -x /etc/init.d/rc.sysinit ]]; then
+    . /etc/init.d/rc.sysinit
+fi
+
+# Make sure the kernel reaps zombies and relays signals to children.
+trap 'echo "init: received SIGINT, rebooting"; reboot -f' INT
+trap 'echo "init: received SIGTERM, halting";  halt -f'    TERM
+
+# Print a friendly banner.
+cat <<'EOF'
+
+   ___           _    ____  ____
+  / _ \ ___  ___| |_ |  _ \|  _ \
+ | | | / __|/ __| __|| | | | | | |
+ | |_| \__ \ (__| |_ | |_| | |_| |
+  \___/|___/\___|\__||____/|____/
+
+   PID 1 init — minimal rc-based. Welcome to DXN1-OS.
+
+EOF
+
+# ---------------------------------------------------------------------------
+# Spawn getty on each VT. We keep tty1 attached to /sbin/agetty so it
+# autologins as 'lfs' on the installer ISO; tty2..6 get a normal login prompt.
+# Also spawn a serial getty if the kernel exposes a serial console.
+# ---------------------------------------------------------------------------
+start_getty() {
+    local tty="$1"; shift
+    local opts="$*"
+    while true; do
+        /sbin/agetty ${opts} "${tty}" 115200 linux
+        sleep 1
+    done &
+}
+
+start_getty tty1 --autologin lfs --noclear
+start_getty tty2 --noclear
+start_getty tty3 --noclear
+start_getty tty4 --noclear
+start_getty tty5 --noclear
+start_getty tty6 --noclear
+
+# Serial console — only if the kernel actually exposed one.
+if [[ -c /dev/ttyS0 ]] && grep -qw console=ttyS0 /proc/cmdline 2>/dev/null; then
+    start_getty ttyS0 --noclear
+fi
+
+# ---------------------------------------------------------------------------
+# Reap zombies forever. PID 1 must not exit; if it does, the kernel panics.
+# ---------------------------------------------------------------------------
+while true; do
+    wait -n 2>/dev/null || sleep 5
+done

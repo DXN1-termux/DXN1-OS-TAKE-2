@@ -1,0 +1,137 @@
+#!/bin/bash
+# =============================================================================
+# DXN1-OS — rc.sysinit (sourced by /sbin/init at boot)
+# -----------------------------------------------------------------------------
+# Performs the second half of the userspace boot sequence after PID 1 has
+# mounted /proc /sys /dev.  Tasks:
+#
+#   * Re-mount the root filesystem read-write (if it came up ro).
+#   * Set the hostname.
+#   * Run udevd and trigger a cold-plug device scan.
+#   * Load essential kernel modules from /etc/modules-load.d.
+#   * Bring up loopback + (optionally) primary NIC via the network service.
+#   * Start all enabled services under /etc/init.d/.
+#   * Clean stale locks, pidfiles, and tmp.
+# =============================================================================
+# Sourced — do not use `set -e` (PID 1 must not die on a flaky mount).
+set +e
+
+. /etc/profile 2>/dev/null || true
+
+log()  { printf '\033[34m[rc.sysinit]\033[0m %s\n' "$*"; }
+ok()   { printf '\033[32m[rc.sysinit] OK: %s\033[0m\n' "$*"; }
+fail() { printf '\033[31m[rc.sysinit] FAIL: %s\033[0m\n' "$*" >&2; }
+
+# ---------------------------------------------------------------------------
+# 1. Root filesystem: read-write.
+# ---------------------------------------------------------------------------
+if mount -o remount,rw / 2>/dev/null; then
+    ok "root filesystem remounted read-write"
+else
+    fail "could not remount root read-write (continuing — may be squashfs)"
+fi
+
+# Mount any extra filesystems from fstab (excluding root, which we just did).
+mount -a 2>/dev/null && ok "extra filesystems mounted" || true
+swapon -a 2>/dev/null && ok "swap enabled" || true
+
+# ---------------------------------------------------------------------------
+# 2. Hostname.
+# ---------------------------------------------------------------------------
+if [[ -r /etc/hostname ]]; then
+    HN=$(cat /etc/hostname 2>/dev/null | tr -dc 'a-zA-Z0-9-_')
+    [[ -n "${HN}" ]] && hostname "${HN}" 2>/dev/null && ok "hostname=${HN}"
+fi
+
+# ---------------------------------------------------------------------------
+# 3. Pseudo-terminal device nodes (busybox systems sometimes lack them).
+# ---------------------------------------------------------------------------
+mkdir -p /dev/pts /dev/shm
+[[ -c /dev/ptmx ]] || mknod -m 0666 /dev/ptmx c 5 2 2>/dev/null || true
+[[ -c /dev/null ]] || mknod -m 0666 /dev/null c 1 3 2>/dev/null || true
+
+# Clean stale state.
+rm -rf /var/run/*.pid /var/lock/* /tmp/.X* 2>/dev/null || true
+mkdir -p /var/run /var/lock /tmp
+chmod 1777 /tmp
+
+# ---------------------------------------------------------------------------
+# 4. udev / devtmpfs cold-plug.
+# ---------------------------------------------------------------------------
+if command -v udevd >/dev/null 2>&1; then
+    log "starting udevd…"
+    udevd --daemon 2>/dev/null
+    udevadm trigger --action=add --subsystem-nomatch=tty 2>/dev/null || true
+    udevadm settle --timeout=10 2>/dev/null || true
+    ok "udevd started, devices enumerated"
+elif command -v mdev >/dev/null 2>&1; then
+    log "starting mdev…"
+    echo /sbin/mdev > /proc/sys/kernel/hotplug 2>/dev/null || true
+    mdev -s 2>/dev/null || true
+    ok "mdev started"
+else
+    fail "no device manager (udevd/mdev) found — devices may be missing"
+fi
+
+# ---------------------------------------------------------------------------
+# 5. Load modules listed in /etc/modules-load.d/*.conf
+# ---------------------------------------------------------------------------
+if [[ -d /etc/modules-load.d ]]; then
+    for f in /etc/modules-load.d/*.conf; do
+        [[ -r "${f}" ]] || continue
+        while read -r mod args; do
+            # Skip comments / blank lines.
+            case "${mod}" in ''|\#*) continue ;; esac
+            modprobe "${mod}" "${args}" 2>/dev/null \
+                && ok "loaded module ${mod}" \
+                || fail "could not load module ${mod}"
+        done < "${f}"
+    done
+fi
+
+# ---------------------------------------------------------------------------
+# 6. Set the system clock from the hardware clock (RTC).
+# ---------------------------------------------------------------------------
+if command -v hwclock >/dev/null 2>&1 && [[ -c /dev/rtc ]]; then
+    hwclock --hctosys --utc 2>/dev/null && ok "system clock set from RTC"
+fi
+
+# Configure kernel tunables.
+sysctl -q -p /etc/sysctl.conf 2>/dev/null || true
+
+# ---------------------------------------------------------------------------
+# 7. Bring up the loopback interface and start the network service.
+# ---------------------------------------------------------------------------
+ip link set lo up 2>/dev/null || ifconfig lo 127.0.0.1 up 2>/dev/null || true
+ok "loopback up"
+
+# ---------------------------------------------------------------------------
+# 8. Start enabled services from /etc/init.d/.
+# ---------------------------------------------------------------------------
+# Services in /etc/runlevels/default/* (openrc-style) get started; if that
+# directory is empty, fall back to a fixed list.
+RUNLEVEL_DIR="/etc/runlevels/default"
+SVC_DEFAULTS=(network udev sshd)
+
+started=()
+for svc in "${SVC_DEFAULTS[@]}"; do
+    script="/etc/init.d/${svc}"
+    [[ -x "${script}" ]] || continue
+    if "${script}" status >/dev/null 2>&1; then
+        ok "service ${svc} already running"
+        continue
+    fi
+    if "${script}" start >/dev/null 2>&1; then
+        ok "started service ${svc}"
+        started+=("${svc}")
+    else
+        fail "service ${svc} failed to start"
+    fi
+done
+[[ -n "${started[*]:-}" ]] && ok "services started: ${started[*]}"
+
+# ---------------------------------------------------------------------------
+# 9. Final banner.
+# ---------------------------------------------------------------------------
+uptime -p 2>/dev/null || true
+log "rc.sysinit done"

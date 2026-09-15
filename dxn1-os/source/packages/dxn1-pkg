@@ -1,0 +1,260 @@
+#!/bin/bash
+# =============================================================================
+# dxn1-pkg — DXN1-OS package manager
+# -----------------------------------------------------------------------------
+# A small, dependency-free package manager for DXN1-OS. Packages are
+# libarchive-compressed tarballs (.dxpkg) with a leading metadata header:
+#
+#   dxn1-pkg metadata header:
+#     # dxn1-pkg/1.0
+#     name=foo
+#     version=1.2.3
+#     arch=x86_64
+#     depends="bar baz"
+#     sha256=<hex>
+#     size=<bytes>
+#     <blank line>
+#     <tarball stream>
+#
+# Commands:
+#   dxn1-pkg install <name>      Download, verify, install.
+#   dxn1-pkg remove  <name>      Remove files listed in the package manifest.
+#   dxn1-pkg update  [name]      Update one or all packages.
+#   dxn1-pkg search  <pattern>   Search package names/descriptions in repos.
+#   dxn1-pkg list                List installed packages.
+#   dxn1-pkg info    <name>      Show installed package metadata.
+#   dxn1-pkg fetch   <name>      Download only (no install).
+# =============================================================================
+set -euo pipefail
+
+DXN1_PKGS_DIR="${DXN1_PKGS_DIR:-/var/lib/dxn1/pkg}"
+DXN1_CACHE_DIR="${DXN1_CACHE_DIR:-/var/cache/dxn1/pkg}"
+DXN1_REPOS_CONF="${DXN1_REPOS_CONF:-/etc/dxn1/repos.list}"
+DXN1_INSTALLED_DB="${DXN1_INSTALLED_DB:-${DXN1_PKGS_DIR}/installed.db}"
+
+mkdir -p "${DXN1_PKGS_DIR}" "${DXN1_CACHE_DIR}"
+
+# ---------------------------------------------------------------------------
+# Logging helpers.
+# ---------------------------------------------------------------------------
+if [[ -t 2 ]]; then
+    C_R=$'\033[31m'; C_G=$'\033[32m'; C_Y=$'\033[33m'; C_B=$'\033[34m'; C_0=$'\033[0m'
+else C_R=""; C_G=""; C_Y=""; C_B=""; C_0=""; fi
+log()  { printf '%s[dxn1-pkg]%s %s\n' "${C_B}" "${C_0}" "$*"; }
+ok()   { printf '%s[dxn1-pkg]✓ %s%s\n' "${C_G}" "${C_0}" "$*"; }
+warn() { printf '%s[dxn1-pkg]! %s%s\n' "${C_Y}" "${C_0}" "$*" >&2; }
+die()  { printf '%s[dxn1-pkg]✗ %s%s\n' "${C_R}" "${C_0}" "$*" >&2; exit 1; }
+
+require_root() {
+    if [[ $EUID -ne 0 ]]; then die "This command requires root."; fi
+}
+
+# ---------------------------------------------------------------------------
+# Read the repo URL list (one per line, comments allowed).
+# ---------------------------------------------------------------------------
+repo_urls() {
+    [[ -r "${DXN1_REPOS_CONF}" ]] || return 0
+    grep -Ev '^\s*(#|$)' "${DXN1_REPOS_CONF}"
+}
+
+# ---------------------------------------------------------------------------
+# fetch <name> — download a package to the local cache.
+# Returns the local cache path on stdout.
+# ---------------------------------------------------------------------------
+fetch_pkg() {
+    local name="$1" url local_path
+    local_path="${DXN1_CACHE_DIR}/${name}.dxpkg"
+
+    if [[ -f "${local_path}" ]] && verify_pkg "${local_path}" >/dev/null 2>&1; then
+        echo "${local_path}"; return 0
+    fi
+
+    while read -r url; do
+        log "fetching ${name} from ${url}…"
+        if wget -q -O "${local_path}.tmp" "${url%/}/${name}.dxpkg"; then
+            mv "${local_path}.tmp" "${local_path}"
+            echo "${local_path}"; return 0
+        fi
+        rm -f "${local_path}.tmp"
+    done < <(repo_urls)
+
+    die "package '${name}' not found in any configured repo."
+}
+
+# ---------------------------------------------------------------------------
+# verify_pkg <path> — check that the SHA-256 in the metadata matches the file
+# body.
+# ---------------------------------------------------------------------------
+verify_pkg() {
+    local path="$1"
+    local meta_sha body_sha body_size declared_size
+    meta_sha=$(awk '/^sha256=/{print $2}' "${path}" | head -n1)
+    declared_size=$(awk '/^size=/{print $2}' "${path}" | head -n1)
+
+    # The header ends at the first blank line; the body is everything after.
+    local header_end
+    header_end=$(awk 'BEGIN{c=0} /^$/{print NR; exit} {c++}' "${path}")
+    [[ -n "${header_end}" ]] || die "invalid package: no header/body separator."
+
+    body_size=$(tail -n +"$((header_end + 1))" "${path}" | wc -c)
+    [[ -n "${declared_size}" ]] && [[ "${body_size}" == "${declared_size}" ]] \
+        || die "size mismatch: declared=${declared_size} actual=${body_size}"
+
+    body_sha=$(tail -n +"$((header_end + 1))" "${path}" | sha256sum | awk '{print $1}')
+    [[ "${body_sha}" == "${meta_sha}" ]] \
+        || die "sha256 mismatch: declared=${meta_sha} actual=${body_sha}"
+    return 0
+}
+
+# ---------------------------------------------------------------------------
+# extract_pkg <path> — extract the package body into /.
+# Records the file list in the installed DB.
+# ---------------------------------------------------------------------------
+extract_pkg() {
+    local path="$1"
+    local name version manifest
+    name=$(awk '/^name=/{print $2}' "${path}" | head -n1)
+    version=$(awk '/^version=/{print $2}' "${path}" | head -n1)
+    manifest="${DXN1_PKGS_DIR}/${name}-${version}.manifest"
+
+    local header_end
+    header_end=$(awk '/^$/{print NR; exit}' "${path}")
+    tail -n +"$((header_end + 1))" "${path}" | tar -xJv -C / 2>/dev/null > "${manifest}" || \
+        tail -n +"$((header_end + 1))" "${path}" | tar -xzv -C / 2>/dev/null > "${manifest}"
+
+    # Append to the installed DB.
+    printf '%s\t%s\t%s\t%s\n' "${name}" "${version}" "${path}" "${manifest}" \
+        >> "${DXN1_INSTALLED_DB}"
+    sort -u "${DXN1_INSTALLED_DB}" -o "${DXN1_INSTALLED_DB}"
+    ok "installed ${name}-${version} ($(wc -l < "${manifest}") files)"
+}
+
+# ---------------------------------------------------------------------------
+# is_installed <name> — print version if installed, return 0/1.
+# ---------------------------------------------------------------------------
+is_installed() {
+    local name="$1"
+    awk -F'\t' -v n="${name}" '$1==n {print $2; exit}' "${DXN1_INSTALLED_DB}" 2>/dev/null
+}
+
+# ---------------------------------------------------------------------------
+# Subcommands.
+# ---------------------------------------------------------------------------
+cmd_install() {
+    require_root
+    local name="$1"
+    if is_installed "${name}" >/dev/null; then
+        ok "${name} already installed ($(is_installed "${name}"))"
+        return 0
+    fi
+    local path
+    path=$(fetch_pkg "${name}")
+    verify_pkg "${path}"
+    extract_pkg "${path}"
+    # Run the package's post-install hook if present.
+    if [[ -x /var/lib/dxn1/pkg/${name}.postinst ]]; then
+        log "running postinst for ${name}…"
+        /var/lib/dxn1/pkg/${name}.postinst || warn "postinst returned non-zero"
+    fi
+}
+
+cmd_remove() {
+    require_root
+    local name="$1"
+    local line manifest
+    line=$(awk -F'\t' -v n="${name}" '$1==n' "${DXN1_INSTALLED_DB}")
+    [[ -n "${line}" ]] || die "package not installed: ${name}"
+    manifest=$(echo "${line}" | awk -F'\t' '{print $4}')
+    [[ -r "${manifest}" ]] || die "manifest missing: ${manifest}"
+    log "removing ${name} ($(wc -l < "${manifest}") files)…"
+    # Remove files in reverse order so directories are emptied first.
+    tac "${manifest}" | while read -r f; do
+        [[ -z "${f}" ]] && continue
+        rm -f -- "${f}" 2>/dev/null || true
+    done
+    # Prune now-empty dirs.
+    find /usr/share /usr/lib /usr/bin /usr/sbin -depth -type d -empty -delete 2>/dev/null || true
+    # Remove from DB.
+    grep -v "^${name}	" "${DXN1_INSTALLED_DB}" > "${DXN1_INSTALLED_DB}.tmp" || true
+    mv "${DXN1_INSTALLED_DB}.tmp" "${DXN1_INSTALLED_DB}"
+    rm -f "${manifest}"
+    ok "removed ${name}"
+}
+
+cmd_update() {
+    require_root
+    local name="${1:-}"
+    if [[ -n "${name}" ]]; then
+        cmd_remove "${name}" || true
+        cmd_install "${name}"
+    else
+        # Update every installed package.
+        while read -r n _; do
+            log "updating ${n}…"
+            cmd_remove "${n}" 2>/dev/null || true
+            cmd_install "${n}" || warn "could not update ${n}"
+        done < <(awk -F'\t' '{print $1, $2}' "${DXN1_INSTALLED_DB}")
+    fi
+}
+
+cmd_search() {
+    local pat="$1" url
+    while read -r url; do
+        if wget -q -O - "${url%/}/index.txt" 2>/dev/null | grep -iE "${pat}"; then
+            :
+        fi
+    done < <(repo_urls)
+}
+
+cmd_list() {
+    [[ -r "${DXN1_INSTALLED_DB}" ]] || return 0
+    awk -F'\t' '{printf "%-30s %s\n", $1, $2}' "${DXN1_INSTALLED_DB}"
+}
+
+cmd_info() {
+    local name="$1"
+    awk -F'\t' -v n="${name}" '$1==n {print "name:    "$1; print "version: "$2; print "file:    "$3; print "manifest:"$4}' \
+        "${DXN1_INSTALLED_DB}" 2>/dev/null || die "not installed: ${name}"
+}
+
+cmd_fetch() {
+    local name="$1"
+    local path; path=$(fetch_pkg "${name}")
+    ok "cached at ${path}"
+}
+
+# ---------------------------------------------------------------------------
+# Usage / dispatch.
+# ---------------------------------------------------------------------------
+usage() {
+    cat <<'EOF'
+dxn1-pkg — DXN1-OS package manager
+
+Usage:
+  dxn1-pkg install <name>        Install a package from a configured repo.
+  dxn1-pkg remove  <name>        Remove an installed package.
+  dxn1-pkg update  [name]        Update one or all installed packages.
+  dxn1-pkg search  <pattern>     Search the repo index for a pattern.
+  dxn1-pkg list                  List installed packages.
+  dxn1-pkg info    <name>        Show metadata for an installed package.
+  dxn1-pkg fetch   <name>        Download a package to cache without installing.
+
+Config files:
+  /etc/dxn1/repos.list           Repository URLs (one per line).
+  /var/lib/dxn1/pkg/installed.db  Installed-package database.
+  /var/cache/dxn1/pkg/           Download cache.
+EOF
+}
+
+[[ $# -ge 1 ]] || { usage; exit 0; }
+case "$1" in
+    install) shift; [[ $# -ge 1 ]] || die "install: missing <name>"; cmd_install "$1" ;;
+    remove)  shift; [[ $# -ge 1 ]] || die "remove: missing <name>";  cmd_remove  "$1" ;;
+    update)  shift; cmd_update "${1:-}" ;;
+    search)  shift; [[ $# -ge 1 ]] || die "search: missing <pattern>"; cmd_search "$1" ;;
+    list)    cmd_list ;;
+    info)    shift; [[ $# -ge 1 ]] || die "info: missing <name>"; cmd_info "$1" ;;
+    fetch)   shift; [[ $# -ge 1 ]] || die "fetch: missing <name>"; cmd_fetch  "$1" ;;
+    -h|--help|help) usage ;;
+    *) die "Unknown command: $1 (try --help)" ;;
+esac

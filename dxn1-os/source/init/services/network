@@ -1,0 +1,70 @@
+#!/bin/bash
+# =============================================================================
+# DXN1-OS — network service
+# -----------------------------------------------------------------------------
+# Brings up the primary wired NIC via DHCP (dhcpcd), or applies a static
+# config from /etc/network/interfaces if defined.
+# =============================================================================
+# Sourced / called by /sbin/init via the service-runner pattern. Implements:
+#   start | stop | restart | status
+# =============================================================================
+set -u
+
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+IFACE="${IFACE:-eth0}"
+
+start() {
+    if ip link show "${IFACE}" >/dev/null 2>&1; then
+        ip link set "${IFACE}" up
+    fi
+
+    # Static config?
+    if grep -q "iface ${IFACE} inet static" /etc/network/interfaces 2>/dev/null; then
+        . /etc/network/interfaces 2>/dev/null || true
+        ip addr flush dev "${IFACE}"
+        ip addr add "${ADDRESS}/${NETMASK:-24}" dev "${IFACE}"
+        ip route add default via "${GATEWAY}" 2>/dev/null || true
+        echo "nameserver ${DNS:-1.1.1.1}" > /etc/resolv.conf
+    elif command -v dhcpcd >/dev/null 2>&1; then
+        dhcpcd -b -q "${IFACE}" 2>/dev/null
+    elif command -v udhcpc >/dev/null 2>&1; then
+        udhcpc -b -i "${IFACE}" -s /usr/share/udhcpc/default.script 2>/dev/null
+    fi
+    return 0
+}
+
+stop() {
+    if command -v dhcpcd >/dev/null 2>&1; then
+        dhcpcd -k -q "${IFACE}" 2>/dev/null || true
+    fi
+    ip link set "${IFACE}" down 2>/dev/null || true
+    return 0
+}
+
+restart() { stop; sleep 1; start; }
+
+status() {
+    if ip addr show "${IFACE}" 2>/dev/null | grep -q 'inet '; then
+        return 0
+    fi
+    return 3
+}
+
+case "${1:-start}" in
+    start)   start ;;
+    stop)    stop  ;;
+    restart) restart ;;
+    status)
+        if status; then
+            echo "network: up (${IFACE})"
+            exit 0
+        else
+            echo "network: down (${IFACE})"
+            exit 3
+        fi
+        ;;
+    *)
+        echo "usage: $0 {start|stop|restart|status}" >&2
+        exit 2
+        ;;
+esac

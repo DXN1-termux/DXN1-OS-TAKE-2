@@ -1,0 +1,215 @@
+#!/bin/bash
+# =============================================================================
+# DXN1-OS — TUI Installer (whiptail/dialog)
+# -----------------------------------------------------------------------------
+# End-user installer, runnable from the bootable ISO's VT1 or a serial
+# console. Walks the user through:
+#
+#   1. Welcome & license
+#   2. Pick target disk
+#   3. Pick partition profile (5GB / full / manual)
+#   4. Set hostname
+#   5. Set root password
+#   6. Create a regular user
+#   7. Pick bootloader (GRUB-BIOS / GRUB-UEFI / none)
+#   8. Confirm & install
+#
+# All disk mutations are delegated to installer/partitioner.sh; the final
+# install is performed by scripts/06-install.sh (called via build.sh --stage 06).
+# =============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck disable=SC1091
+source "${SCRIPT_DIR}/config/environment"
+
+# Prefer whiptail (always present on Debian-derivs) but fall back to dialog.
+if command -v whiptail >/dev/null 2>&1; then
+    DIALOG=(whiptail)
+elif command -v dialog >/dev/null 2>&1; then
+    DIALOG=(dialog)
+else
+    echo "FATAL: neither whiptail nor dialog is installed." >&2
+    exit 1
+fi
+DIALOG+=( --backtitle "DXN1-OS ${LFS_VERSION} installer" )
+
+# A scratch file we use to read dialog's stdout (since stderr is the TUI).
+ANSWER=$(mktemp -t dxn1-ans.XXXXXX)
+trap 'rm -f "${ANSWER}"' EXIT
+
+ask()  { "${DIALOG[@]}" "$@" 3>&1 1>&2 2>&3; }
+msg()  { "${DIALOG[@]}" --msgbox "$1" 8 72; }
+yesno() {
+    "${DIALOG[@]}" --yesno "$1" 8 72 3>&1 1>&2 2>&3
+}
+
+[[ $EUID -eq 0 ]] || { msg "Installer must run as root."; exit 1; }
+
+# ---------------------------------------------------------------------------
+# Step 1: Welcome.
+# ---------------------------------------------------------------------------
+msg "Welcome to DXN1-OS ${LFS_VERSION}.
+
+This installer will:
+  • partition a target disk,
+  • install the DXN1-OS rootfs,
+  • install the GRUB bootloader,
+  • set hostname, root password, and a user account.
+
+You can abort at any time by pressing Cancel. No changes will be written
+until the final 'Confirm & install' step."
+
+# ---------------------------------------------------------------------------
+# Step 2: Pick target disk.
+# ---------------------------------------------------------------------------
+list_disks() {
+    local out=()
+    while read -r name size model; do
+        [[ "${name}" == "name" ]] && continue
+        out+=("/dev/${name}" "${size} ${model}")
+    done < <(lsblk -bdno NAME,SIZE,MODEL | sort -u)
+    if [[ ${#out[@]} -eq 0 ]]; then
+        msg "No block devices found. The installer cannot continue."
+        exit 1
+    fi
+    printf '%s\n' "${out[@]}"
+}
+
+ask --title "Select target disk" \
+    --menu "Choose the disk to install DXN1-OS onto.
+
+WARNING: the chosen disk will be ERASED." 18 76 12 \
+    $(list_disks) 2>"${ANSWER}" || { msg "Aborted."; exit 0; }
+DISK=$(cat "${ANSWER}")
+
+if [[ "${DISK}" == "/dev/null" ]]; then
+    msg "Invalid selection."
+    exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# Step 3: Partition profile.
+# ---------------------------------------------------------------------------
+ask --title "Partition layout" \
+    --menu "How should the disk be partitioned?" 14 76 4 \
+    "5gb"     "5 GB minimal install (1 GB swap + ~4 GB root). USB/embedded." \
+    "full"    "Use entire disk (swap = 1/8 of disk, root = remainder)." \
+    "manual"  "Use pre-existing partitions (no re-partition)." \
+    2>"${ANSWER}" || { msg "Aborted."; exit 0; }
+PROFILE=$(cat "${ANSWER}")
+
+# ---------------------------------------------------------------------------
+# Step 4: Hostname.
+# ---------------------------------------------------------------------------
+ask --title "Hostname" --inputbox "Hostname for the new system:" 8 60 "dxn1-os" 2>"${ANSWER}" || { msg "Aborted."; exit 0; }
+HOSTNAME=$(tr -dc 'a-zA-Z0-9-' < "${ANSWER}")
+[[ -n "${HOSTNAME}" ]] || HOSTNAME="dxn1-os"
+
+# ---------------------------------------------------------------------------
+# Step 5: Root password.
+# ---------------------------------------------------------------------------
+while true; do
+    ask --title "Root password" --passwordbox "Choose a root password (8+ chars):" 8 60 2>"${ANSWER}" || exit 0
+    PW1=$(cat "${ANSWER}")
+    ask --title "Root password" --passwordbox "Confirm root password:" 8 60 2>"${ANSWER}" || exit 0
+    PW2=$(cat "${ANSWER}")
+    if [[ "${PW1}" == "${PW2}" ]] && [[ ${#PW1} -ge 8 ]]; then break; fi
+    msg "Passwords did not match or were too short. Try again."
+done
+ROOT_PW="${PW1}"
+unset PW1 PW2
+
+# ---------------------------------------------------------------------------
+# Step 6: Regular user.
+# ---------------------------------------------------------------------------
+ask --title "User account" --inputbox "Username for a regular user (blank to skip):" 8 60 "lfs" 2>"${ANSWER}" || exit 0
+USERNAME=$(tr -dc 'a-z0-9_' < "${ANSWER}")
+if [[ -n "${USERNAME}" ]]; then
+    while true; do
+        ask --title "User password" --passwordbox "Password for ${USERNAME}:" 8 60 2>"${ANSWER}" || exit 0
+        UPW1=$(cat "${ANSWER}")
+        ask --title "User password" --passwordbox "Confirm password for ${USERNAME}:" 8 60 2>"${ANSWER}" || exit 0
+        UPW2=$(cat "${ANSWER}")
+        if [[ "${UPW1}" == "${UPW2}" ]] && [[ ${#UPW1} -ge 8 ]]; then break; fi
+        msg "Passwords did not match or were too short. Try again."
+    done
+    USER_PW="${UPW1}"
+    unset UPW1 UPW2
+fi
+
+# ---------------------------------------------------------------------------
+# Step 7: Bootloader.
+# ---------------------------------------------------------------------------
+if [[ -d /sys/firmware/efi ]]; then
+    DEFAULT_BL="grub-uefi"
+else
+    DEFAULT_BL="grub-bios"
+fi
+ask --title "Bootloader" --menu "Pick a bootloader:" 12 60 3 \
+    "${DEFAULT_BL}" "GRUB (${DEFAULT_BL##*-})" \
+    "none" "Skip bootloader (already installed)" \
+    2>"${ANSWER}" || exit 0
+BOOTLOADER=$(cat "${ANSWER}")
+
+# ---------------------------------------------------------------------------
+# Step 8: Confirm & install.
+# ---------------------------------------------------------------------------
+summary="Disk:          ${DISK}
+Partition:     ${PROFILE}
+Hostname:      ${HOSTNAME}
+Root password: set
+User:          ${USERNAME:-<none>}
+Bootloader:    ${BOOTLOADER}
+
+WARNING: ALL DATA ON ${DISK} WILL BE LOST."
+
+if ! yesno "${summary}
+
+Proceed with installation?"; then
+    msg "Installation cancelled."
+    exit 0
+fi
+
+# ---------------------------------------------------------------------------
+# Perform the install. Delegates disk mutation to partitioner.sh, then calls
+# the stage 06 install script.
+# ---------------------------------------------------------------------------
+msg "Partitioning ${DISK} (profile: ${PROFILE})… this may take a moment."
+if ! bash "${SCRIPT_DIR}/installer/partitioner.sh" \
+        --disk "${DISK}" --profile "${PROFILE}" --force 2>&1; then
+    msg "Partitioning failed. See /var/log/dxn1/installer.log for details."
+    exit 1
+fi
+
+msg "Installing rootfs + bootloader… this takes 2-5 minutes."
+if ! bash "${SCRIPT_DIR}/build.sh" --stage 06 --disk "${DISK}" 2>&1; then
+    msg "Install failed. See build logs in ${DXN1_LOG_DIR}."
+    exit 1
+fi
+
+# Set hostname + root password on the target.
+TARGET_MNT="${DXN1_OUT}/target"
+echo "${HOSTNAME}" > "${TARGET_MNT}/etc/hostname"
+chroot "${TARGET_MNT}" /usr/bin/chpasswd <<< "root:${ROOT_PW}"
+if [[ -n "${USERNAME}" ]]; then
+    chroot "${TARGET_MNT}" /usr/sbin/useradd -m -G users,video,audio,input \
+        -s /bin/bash "${USERNAME}"
+    chroot "${TARGET_MNT}" /usr/bin/chpasswd <<< "${USERNAME}:${USER_PW}"
+fi
+
+# Run post-install (timezone, locale, fstab finalization).
+bash "${SCRIPT_DIR}/installer/post-install.sh" \
+    --root "${TARGET_MNT}" --hostname "${HOSTNAME}" || true
+
+umount -R "${TARGET_MNT}" 2>/dev/null || true
+
+msg "Installation complete!
+
+Reboot to start DXN1-OS on ${DISK}.
+
+Hostname: ${HOSTNAME}
+User:     ${USERNAME:-root}
+
+Remove the installation media, then press OK to reboot."
+sync

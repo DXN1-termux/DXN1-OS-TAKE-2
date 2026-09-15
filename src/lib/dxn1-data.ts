@@ -1,0 +1,273 @@
+// Static metadata for DXN1-OS distribution site.
+// Driver matrix, feature list, source tree, boot sequence.
+
+export type Feature = {
+  icon: string;
+  title: string;
+  desc: string;
+  tag: string;
+};
+
+export const FEATURES: Feature[] = [
+  {
+    icon: "Cpu",
+    title: "Full Driver Support",
+    desc: "GPU (amdgpu/nouveau/i915), wired NICs, Wi-Fi (iwlwifi/ath/brcm), Bluetooth, audio codecs and input devices are compiled into the kernel or shipped as modules with firmware blobs pre-installed.",
+    tag: "kernel-modules",
+  },
+  {
+    icon: "Usb",
+    title: "USB & DriveDroid Install",
+    desc: "Flash the hybrid ISO straight to a USB stick with dd, or import it as a raw image into DriveDroid on your phone and boot any PC from it — no dedicated install media required.",
+    tag: "dd · drivedroid",
+  },
+  {
+    icon: "HardDrive",
+    title: "5 GB Partition Option",
+    desc: "The TUI installer offers a '5gb' profile: a 1 MiB BIOS boot + ESP, 1 GiB swap and ~3 GiB root — install DXN1-OS alongside your existing OS without nuking the disk.",
+    tag: "profile: 5gb",
+  },
+  {
+    icon: "Disc",
+    title: "Hybrid BIOS+UEFI ISO",
+    desc: "A single xorriso-assembled ISO9660 image with isolinux (BIOS) and GRUB (UEFI) boot paths, a zstd-compressed SquashFS rootfs and a busybox initramfs that live-boots into RAM.",
+    tag: "isolinux + grub",
+  },
+  {
+    icon: "Terminal",
+    title: "TUI Installer",
+    desc: "A whiptail/dialog-based guided installer — pick disk, partition profile (5gb / full / manual), set hostname & root password, choose bootloader, and confirm. Runs entirely in a terminal.",
+    tag: "whiptail/dialog",
+  },
+  {
+    icon: "Package",
+    title: "dxn1-pkg Manager",
+    desc: "A bash package manager with install/remove/update/search subcommands, a custom .dxpkg format (metadata header + sha256-verified tarball), manifest-based removal and a local installed.db.",
+    tag: ".dxpkg format",
+  },
+  {
+    icon: "LayoutGrid",
+    title: "Minimal Tiling WM",
+    desc: "A keyboard-driven tiling window manager: Mod4+Enter spawns a terminal, 1-9 switches desktops, h/l resizes the master, Space toggles monocle. Xorg + a clean status bar, no DE bloat.",
+    tag: "tiling-wm",
+  },
+  {
+    icon: "GitBranch",
+    title: "Built From Source",
+    desc: "The entire system is bootstrapped the LFS way: a two-stage toolchain (pass-1 cross, pass-2 native), then every package compiled natively. Reproducible builds verified by sha256 diff.",
+    tag: "LFS pipeline",
+  },
+];
+
+export type DriverRow = {
+  vendor: string;
+  chips: string;
+  module: string;
+  status: "ok" | "partial" | "no";
+};
+
+export type DriverClass = {
+  class: string;
+  icon: string;
+  rows: DriverRow[];
+};
+
+export const DRIVER_MATRIX: DriverClass[] = [
+  {
+    class: "GPU",
+    icon: "Monitor",
+    rows: [
+      { vendor: "AMD", chips: "RDNA1/2/3, Vega, Polaris", module: "amdgpu", status: "ok" },
+      { vendor: "Intel", chips: "Gen9-12, Xe, Arc", module: "i915 / xe", status: "ok" },
+      { vendor: "NVIDIA", chips: "Turing, Pascal, Maxwell", module: "nouveau", status: "partial" },
+      { vendor: "VMware", chips: "SVGA", module: "vmwgfx", status: "ok" },
+      { vendor: "QEMU", chips: "virtio-gpu, Bochs", module: "virtio_gpu / bochs", status: "ok" },
+    ],
+  },
+  {
+    class: "Wired NIC",
+    icon: "Ethernet",
+    rows: [
+      { vendor: "Intel", chips: "I219, I225, I350, 82574/79", module: "e1000 / e1000e / igb", status: "ok" },
+      { vendor: "Realtek", chips: "RTL8111/8168/8125", module: "r8169", status: "ok" },
+      { vendor: "Broadcom", chips: "BCM57xx, BCM5719", module: "tg3 / bnx2x", status: "ok" },
+      { vendor: "Marvell", chips: "88E8056/88E8072", module: "sky2", status: "ok" },
+      { vendor: "Qualcomm", chips: "Atheros AR8161/8171", module: "alx", status: "ok" },
+    ],
+  },
+  {
+    class: "Wi-Fi",
+    icon: "Wifi",
+    rows: [
+      { vendor: "Intel", chips: "AX200/AX210/AC 9560", module: "iwlwifi", status: "ok" },
+      { vendor: "Atheros", chips: "AR9287, QCA9377, QCA6390", module: "ath9k / ath10k / ath11k", status: "ok" },
+      { vendor: "Broadcom", chips: "BCM4360, BCM4356", module: "brcmfmac / brcmsmac", status: "partial" },
+      { vendor: "Realtek", chips: "RTL8822BE, RTL8821CE", module: "rtw88 / rtw89", status: "partial" },
+      { vendor: "MediaTek", chips: "MT7921, MT7922", module: "mt7921e", status: "ok" },
+    ],
+  },
+  {
+    class: "Audio",
+    icon: "Volume2",
+    rows: [
+      { vendor: "Realtek", chips: "ALC8xx, ALC2xx, ALC12xx", module: "snd-hda-intel", status: "ok" },
+      { vendor: "Conexant", chips: "CX20xxx", module: "snd-hda-intel", status: "ok" },
+      { vendor: "C-Media / USB", chips: "CM106, USB DACs", module: "snd-usb-audio", status: "ok" },
+      { vendor: "Intel", chips: "HDMI/DP audio", module: "snd-hda-intel (intelhdmi)", status: "ok" },
+      { vendor: "AMD", chips: "ACP audio", module: "snd-pci-acp5x", status: "partial" },
+    ],
+  },
+  {
+    class: "Input",
+    icon: "MousePointerClick",
+    rows: [
+      { vendor: "Generic", chips: "evdev / libinput", module: "evdev", status: "ok" },
+      { vendor: "Synaptics", chips: "touchpads", module: "synaptics_i2c", status: "ok" },
+      { vendor: "ELAN", chips: "I2C touchpads", module: "elan_i2c", status: "ok" },
+      { vendor: "Wacom", chips: "Intuos, Cintiq", module: "wacom", status: "ok" },
+      { vendor: "Apple", chips: "SPK keyboard", module: "applespi / hid-apple", status: "partial" },
+    ],
+  },
+  {
+    class: "Storage",
+    icon: "HardDrive",
+    rows: [
+      { vendor: "AHCI", chips: "SATA SSD/HDD", module: "ahci", status: "ok" },
+      { vendor: "NVMe", chips: "PCIe NVMe", module: "nvme", status: "ok" },
+      { vendor: "USB", chips: "UAS / BOT", module: "usb-storage / uas", status: "ok" },
+      { vendor: "virtio", chips: "blk, scsi", module: "virtio_blk", status: "ok" },
+      { vendor: "eMMC / SD", chips: "mmcblk", module: "sdhci / sdhci-pci", status: "ok" },
+    ],
+  },
+];
+
+export type TreeNode = {
+  name: string;
+  type: "dir" | "file";
+  size?: string;
+  desc?: string;
+  children?: TreeNode[];
+};
+
+export const SOURCE_TREE: TreeNode = {
+  name: "dxn1-os-source/",
+  type: "dir",
+  children: [
+    { name: "README.md", type: "file", size: "4.2 KiB", desc: "Project overview, features, quick-start" },
+    { name: "build.sh", type: "file", size: "3.8 KiB", desc: "Main build orchestrator (--all/--stage/--from)" },
+    {
+      name: "config/",
+      type: "dir",
+      children: [
+        { name: "environment", type: "file", size: "1.1 KiB", desc: "LFS env vars: LFS=/mnt/dxn1, MAKEFLAGS…" },
+        { name: "kernel.config", type: "file", size: "13.0 KiB", desc: "200+ kernel CONFIG lines (drivers, fs, net)" },
+        { name: "packages.list", type: "file", size: "1.6 KiB", desc: "60+ version-pinned packages" },
+      ],
+    },
+    {
+      name: "scripts/",
+      type: "dir",
+      children: [
+        { name: "00-prepare.sh", type: "file", size: "3.4 KiB", desc: "Host checks, lfs user, build tree" },
+        { name: "01-partition.sh", type: "file", size: "5.9 KiB", desc: "Partitioning — 5gb / full / manual profiles" },
+        { name: "02-bootstrap.sh", type: "file", size: "9.1 KiB", desc: "LFS two-stage toolchain (gcc/glibc/binutils)" },
+        { name: "03-build-kernel.sh", type: "file", size: "2.7 KiB", desc: "Configure & build Linux 6.10.5 + modules" },
+        { name: "04-build-system.sh", type: "file", size: "10.2 KiB", desc: "Chrooted base system build" },
+        { name: "05-drivers.sh", type: "file", size: "4.9 KiB", desc: "Compile driver module classes" },
+        { name: "06-install.sh", type: "file", size: "5.6 KiB", desc: "Install rootfs + GRUB to target disk" },
+        { name: "07-create-iso.sh", type: "file", size: "10.0 KiB", desc: "xorriso hybrid ISO + squashfs + initramfs" },
+        { name: "08-usb-flash.sh", type: "file", size: "5.3 KiB", desc: "dd flasher (USB / image / DriveDroid)" },
+      ],
+    },
+    {
+      name: "init/",
+      type: "dir",
+      children: [
+        { name: "init", type: "file", size: "1.8 KiB", desc: "PID 1 — mounts, rc.sysinit, spawns getty" },
+        { name: "rc.sysinit", type: "file", size: "2.4 KiB", desc: "udev, hostname, modules, hwclock" },
+        {
+          name: "services/",
+          type: "dir",
+          children: [
+            { name: "network", type: "file", size: "1.2 KiB", desc: "dhcpcd / static config" },
+            { name: "udev", type: "file", size: "0.9 KiB", desc: "udevd + cold-plug" },
+            { name: "sshd", type: "file", size: "1.0 KiB", desc: "OpenSSH host keys + daemon" },
+          ],
+        },
+      ],
+    },
+    {
+      name: "installer/",
+      type: "dir",
+      children: [
+        { name: "dxn1-installer", type: "file", size: "6.8 KiB", desc: "whiptail/dialog TUI installer (8 steps)" },
+        { name: "partitioner.sh", type: "file", size: "4.4 KiB", desc: "5gb / full / manual partition front-end" },
+        { name: "post-install.sh", type: "file", size: "2.9 KiB", desc: "timezone, locale, fstab, grub" },
+      ],
+    },
+    {
+      name: "drivers/",
+      type: "dir",
+      children: [
+        { name: "gpu/build.sh", type: "file", size: "5.1 KiB", desc: "libdrm + mesa, amdgpu/nouveau/i915" },
+        { name: "network/build.sh", type: "file", size: "3.2 KiB", desc: "e1000/r8169/tg3/sky2/alx probing" },
+        { name: "audio/build.sh", type: "file", size: "3.8 KiB", desc: "alsa-lib/utils + pipewire + wireplumber" },
+        { name: "input/build.sh", type: "file", size: "3.0 KiB", desc: "libinput + evdev + synaptics" },
+        { name: "wifi/build.sh", type: "file", size: "4.6 KiB", desc: "iwlwifi/ath/brcm/rtw + bluetooth" },
+      ],
+    },
+    {
+      name: "packages/",
+      type: "dir",
+      children: [
+        { name: "dxn1-pkg", type: "file", size: "9.8 KiB", desc: "Bash pkg manager (.dxpkg, sha256, manifest)" },
+        { name: "repos.list", type: "file", size: "0.3 KiB", desc: "3 repos (primary / EU mirror / offline)" },
+      ],
+    },
+    {
+      name: "desktop/",
+      type: "dir",
+      children: [
+        { name: "dxn1-wm", type: "file", size: "5.5 KiB", desc: "Tiling WM launcher + keybinds" },
+      ],
+    },
+    {
+      name: "docs/",
+      type: "dir",
+      children: [
+        { name: "INSTALL.md", type: "file", size: "6.1 KiB", desc: "End-user install guide" },
+        { name: "BUILD.md", type: "file", size: "7.6 KiB", desc: "LFS build pipeline + reproducibility" },
+        { name: "DRIVERS.md", type: "file", size: "10.6 KiB", desc: "Full hardware support matrix" },
+      ],
+    },
+  ],
+};
+
+export const BOOT_LINES: { text: string; status?: "ok" | "info" | "warn" }[] = [
+  { text: "[    0.000000] Linux version 6.10.5 (root@dxn1-build) (gcc 14.2.0, glibc 2.40)" },
+  { text: "[    0.013244] Command line: BOOT_IMAGE=/boot/bzImage root=live:CDLABEL=DXN1OS quiet" },
+  { text: "[    0.041002] x86/fpu: Supporting XSAVE feature 0x001: 'x87 floating point registers'" },
+  { text: "[    0.072913] BIOS-provided physical RAM map:" },
+  { text: "[    0.104551] ACPI: PM-Timer IO Port: 0x408" },
+  { text: "[    0.219884] smpboot: Total of 8 processors activated (51200.00 BogoMIPS)" },
+  { text: "[    0.401332] raid6: avx2x4 gen() 28000 MB/s" },
+  { text: "[    0.582001] ACPI: bus type PCI registered", status: "info" },
+  { text: "[    0.714229] pci 0000:00:02.0: vgaarb: setting as boot device", status: "info" },
+  { text: "[    0.901233] DMAR: IOMMU enabled" },
+  { text: "[    1.118422] ahci 0000:00:17.0: AHCI 0001.0301 32 slots 6 ports 6 Gbps", status: "ok" },
+  { text: "[    1.304551] scsi 0:0:0:0: Direct-Access     ATA      SSD  256GB       " },
+  { text: "[    1.502918] r8169 0000:02:00.0: eth0: RTL8168g, link up, 1000 Mbps", status: "ok" },
+  { text: "[    1.701229] iwlwifi 0000:03:00.0: loaded firmware version 72.dabc06", status: "ok" },
+  { text: "[    1.908844] snd_hda_intel 0000:00:1f.3: bound to HDA codec Realtek ALC1220", status: "ok" },
+  { text: "[    2.113229] amdgpu 0000:01:00.0: amdgpu: VRAM 8GB ready", status: "ok" },
+  { text: "[    2.319991] input: Synaptics TM3289-002 as /devices/platform/i8042/serio1" },
+  { text: "[    2.514002] dxn1-init: mounting squashfs rootfs from /dev/sr0", status: "info" },
+  { text: "[    2.701229] dxn1-init: switch_root -> /sbin/init", status: "info" },
+  { text: "[    2.918443] DXN1-OS 1.0 'oxide' (tty1)", status: "ok" },
+];
+
+export const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
+  ok: { label: "SUPPORTED", cls: "text-emerald-400 border-emerald-500/40 bg-emerald-500/10" },
+  partial: { label: "PARTIAL", cls: "text-amber-400 border-amber-500/40 bg-amber-500/10" },
+  no: { label: "UNSUPPORTED", cls: "text-red-400 border-red-500/40 bg-red-500/10" },
+};

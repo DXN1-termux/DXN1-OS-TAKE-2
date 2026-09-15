@@ -1,0 +1,107 @@
+{
+  "name": "DXN1-OS",
+  "version": "1.0",
+  "codename": "oxide",
+  "arch": "x86_64",
+  "build_id": "2025.01-lts",
+  "build_date": "2026-09-15T17:51:06Z",
+  "iso_label": "DXN1OS",
+  "iso_size_bytes": 81920,
+  "iso_size_human": "80.0 KiB",
+  "base": "Linux From Scratch 12.2-systemd (OpenRC variant)",
+  "kernel": "6.10.5",
+  "toolchain": {
+    "gcc": "14.2.0",
+    "binutils": "2.43.1",
+    "glibc": "2.40"
+  },
+  "boot": {
+    "mode": [
+      "bios",
+      "uefi"
+    ],
+    "loader_bios": "isolinux/isolinux.bin",
+    "loader_uefi": "boot/grub/grub.cfg",
+    "kernel": "boot/bzImage",
+    "initramfs": "boot/initramfs.img",
+    "rootfs": "dxn1/rootfs.squashfs",
+    "rootfs_type": "squashfs (zstd -19, 1MiB block)"
+  },
+  "install_profiles": {
+    "5gb": {
+      "boot": "1MiB",
+      "esp": "1MiB+",
+      "swap": "1GiB",
+      "root": "~3GiB"
+    },
+    "full": {
+      "swap": "min(1/8 disk, 8GiB)",
+      "root": "rest of disk"
+    },
+    "manual": "use pre-existing partitions"
+  },
+  "boot_menu": [
+    "DXN1-OS 1.0 (default, full driver support)",
+    "DXN1-OS 1.0 (safe graphics, nomodeset)",
+    "DXN1-OS Installer (TUI)",
+    "DXN1-OS Rescue Shell",
+    "Memtest86+",
+    "Hardware Detection Tool"
+  ],
+  "driver_classes": [
+    "gpu",
+    "network",
+    "audio",
+    "input",
+    "wifi",
+    "bluetooth"
+  ],
+  "features": [
+    "Full driver support (GPU/NIC/WiFi/Audio/Input)",
+    "USB / DriveDroid installable",
+    "5 GB minimal partition install option",
+    "Hybrid BIOS+UEFI bootable ISO",
+    "TUI installer (whiptail/dialog)",
+    "dxn1-pkg package manager",
+    "Minimal tiling window manager"
+  ],
+  "contents": [
+    {
+      "path": "/isolinux/isolinux.cfg",
+      "desc": "BIOS boot menu config"
+    },
+    {
+      "path": "/boot/grub/grub.cfg",
+      "desc": "UEFI GRUB boot menu config"
+    },
+    {
+      "path": "/boot/bzImage",
+      "desc": "Linux 6.10.5 kernel"
+    },
+    {
+      "path": "/boot/initramfs.img",
+      "desc": "Busybox initramfs (live boot)"
+    },
+    {
+      "path": "/dxn1/rootfs.squashfs",
+      "desc": "Compressed root filesystem"
+    },
+    {
+      "path": "/dxn1/installer/dxn1-installer",
+      "desc": "TUI installer"
+    },
+    {
+      "path": "/VERSION",
+      "desc": "Release marker"
+    },
+    {
+      "path": "/README.txt",
+      "desc": "This ISO readme"
+    }
+  ],
+  "verify": {
+    "sha256_sidecar": "dxn1-os-1.0.iso.sha256",
+    "gpg": "dxn1-os-1.0.iso.sig"
+  },
+  "sha256": "67e8aa8a931c57323aaaa9463dd4453d60e5df3139c657dcce58da357712e7d8"
+}

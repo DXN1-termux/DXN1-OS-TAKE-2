@@ -1,0 +1,66 @@
+#!/bin/bash
+# =============================================================================
+# DXN1-OS — udev device manager service
+# -----------------------------------------------------------------------------
+# Manages the udevd daemon lifecycle. udevd is started early in rc.sysinit,
+# but this script lets the admin restart/stop it cleanly.
+# =============================================================================
+set -u
+PATH=/sbin:/bin:/usr/sbin:/usr/bin
+PIDFILE=/run/udevd.pid
+
+start() {
+    if [[ -f "${PIDFILE}" ]] && kill -0 "$(cat "${PIDFILE}")" 2>/dev/null; then
+        return 0
+    fi
+    if command -v udevd >/dev/null 2>&1; then
+        udevd --daemon
+        echo $! > "${PIDFILE}"
+    elif [[ -x /lib/systemd/systemd-udevd ]]; then
+        /lib/systemd/systemd-udevd --daemon
+        echo $! > "${PIDFILE}"
+    else
+        echo "udevd not installed" >&2
+        return 1
+    fi
+    udevadm trigger --action=add       2>/dev/null || true
+    udevadm settle   --timeout=10     2>/dev/null || true
+    return 0
+}
+
+stop() {
+    if [[ -f "${PIDFILE}" ]]; then
+        kill -TERM "$(cat "${PIDFILE}")" 2>/dev/null || true
+        rm -f "${PIDFILE}"
+    fi
+    pkill -x udevd 2>/dev/null || true
+    return 0
+}
+
+restart() { stop; sleep 1; start; }
+
+status() {
+    if [[ -f "${PIDFILE}" ]] && kill -0 "$(cat "${PIDFILE}")" 2>/dev/null; then
+        return 0
+    fi
+    pgrep -x udevd >/dev/null 2>&1
+}
+
+case "${1:-start}" in
+    start)   start ;;
+    stop)    stop  ;;
+    restart) restart ;;
+    status)
+        if status; then
+            echo "udevd: running ($(cat "${PIDFILE}" 2>/dev/null || echo unknown))"
+            exit 0
+        else
+            echo "udevd: stopped"
+            exit 3
+        fi
+        ;;
+    *)
+        echo "usage: $0 {start|stop|restart|status}" >&2
+        exit 2
+        ;;
+esac

@@ -1,0 +1,94 @@
+# =============================================================================
+# DXN1-OS build environment — sourced by every script in scripts/.
+# =============================================================================
+# This file is plain POSIX-ish shell: only variable assignments and a handful
+# of $(...) expansions, so it can be `source`d from both bash and dash.
+# =============================================================================
+
+# ---- Version & identity -----------------------------------------------------
+export DXN1_OS_NAME="DXN1-OS"
+export LFS_VERSION="1.0"
+export DXN1_CODENAME="argon"
+
+# ---- Build host / target ----------------------------------------------------
+# LFS root mount point on the build host.
+export LFS="/mnt/dxn1"
+
+# Target triplet used by the cross toolchain in stage 02.
+export LFS_TGT="$(uname -m)-lfs-linux-gnu"
+
+# Architecture & kernel flavour.
+export DXN1_ARCH="$(uname -m)"
+export DXN1_KERNEL_FLAVOUR="generic"
+
+# ---- Parallelism ------------------------------------------------------------
+export MAKEFLAGS="-j$(nproc)"
+export NPROC="$(nproc)"
+
+# ---- Locale & toolchain strictness ------------------------------------------
+# LFS demands a clean POSIX locale for the bootstrap.
+export LC_ALL="POSIX"
+export LANG="C.UTF-8"
+# Some build systems honour these to avoid locale-dependent behaviour.
+export CONFIG_SITE="/usr/share/config.site"
+
+# Make the toolchain deterministic where possible.
+export SOURCE_DATE_EPOCH="$(date -d '2024-01-01' +%s 2>/dev/null || echo 1704067200)"
+
+# ---- Directory layout -------------------------------------------------------
+# Where the build happens: toolchain, rootfs, kernel, ISO, etc.
+export DXN1_OUT="${DXN1_OUT:-/var/lib/dxn1/build}"
+export DXN1_SOURCES="${DXN1_SOURCES:-${DXN1_OUT}/sources}"
+export DXN1_STATE_DIR="${DXN1_STATE_DIR:-${DXN1_OUT}/state}"
+export DXN1_LOG_DIR="${DXN1_LOG_DIR:-${DXN1_OUT}/logs}"
+export DXN1_TC_DIR="${DXN1_TC_DIR:-${DXN1_OUT}/toolchain}"
+export DXN1_ROOTFS="${DXN1_ROOTFS:-${DXN1_OUT}/rootfs}"
+export DXN1_KERNEL_DIR="${DXN1_KERNEL_DIR:-${DXN1_OUT}/kernel}"
+export DXN1_ISO_DIR="${DXN1_ISO_DIR:-${DXN1_OUT}/iso}"
+
+# Tarball cache for fetched upstream sources.
+export DXN1_TARBALL_CACHE="${DXN1_TARBALL_CACHE:-${DXN1_OUT}/tarballs}"
+
+# ---- Target disk / partitioning --------------------------------------------
+# Defaults: the 5GB minimal install profile. Overridable per-invocation.
+export LFS_PARTITION_SIZE="5G"
+export LFS_SWAP_SIZE="1G"
+export LFS_ROOT_LABEL="dxn1-root"
+export LFS_SWAP_LABEL="dxn1-swap"
+
+# Default target block device. MUST be overridden by --disk on the command
+# line for stages 01, 06, 08 — the scripts refuse to touch the default value.
+export DXN1_DISK="${DXN1_DISK:-/dev/null}"
+
+# ---- ISO / image naming ------------------------------------------------------
+export DXN1_ISO="dxn1-os-${LFS_VERSION}.iso"
+export DXN1_USB_IMG="dxn1-os-${LFS_VERSION}.img"
+export DXN1_DRIVEDROID_IMG="dxn1-os-${LFS_VERSION}.drivedroid.img"
+
+# ISO volume label & publisher (visible in `isoinfo -d`).
+export DXN1_ISO_LABEL="DXN1OS_${LFS_VERSION}"
+export DXN1_ISO_PUBLISHER="DXN1 Project <https://dxn1.org>"
+
+# ---- Upstream source mirrors ------------------------------------------------
+# The LFS upstream mirror is preferred; GNU/kernel.org as fallback.
+export LFS_MIRROR="https://sources.buildroot.net"
+export LFS_FALLBACK_MIRROR="https://ftp.gnu.org/gnu"
+export KERNEL_MIRROR="https://cdn.kernel.org/pub/linux/kernel/v6.x"
+
+# ---- Toolchain / configure flags -------------------------------------------
+# Common configure flags applied to most autotools packages in stage 04.
+export DXN1_CONFIGURE_COMMON="--build=$(uname -m)-pc-linux-gnu --disable-nls --disable-static --enable-shared"
+export DXN1_CFLAGS="-O2 -pipe -march=native -mtune=native -fstack-protector-strong -D_FORTIFY_SOURCE=2"
+export DXN1_CXXFLAGS="${DXN1_CFLAGS}"
+export DXN1_LDFLAGS="-Wl,-z,relro,-z,now"
+
+# ---- Users & accounts -------------------------------------------------------
+export LFS_USER="lfs"
+export LFS_GROUP="lfs"
+export LFS_HOME="/home/${LFS_USER}"
+
+# ---- Misc -------------------------------------------------------------------
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+# Mark the environment as loaded so scripts can detect double-sourcing.
+export DXN1_ENV_LOADED="1"

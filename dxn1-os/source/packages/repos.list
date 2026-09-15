@@ -1,0 +1,19 @@
+# =============================================================================
+# DXN1-OS — package repository list
+# -----------------------------------------------------------------------------
+# Format:  one URL per line. Comments and blank lines are ignored.
+# The package manager (dxn1-pkg) appends "/<name>.dxpkg" to each URL when
+# fetching a package named <name>. Repositories are tried in order; the first
+# that yields a successful download wins.
+# =============================================================================
+
+# Primary DXN1-OS package repo (HTTPS, served by the project's mirror CDN).
+https://packages.dxn1.org/repo/stable
+
+# Community mirror (Europe).
+https://dxn1-mirror.eu.example.org/packages/stable
+
+# Local file:/// fallback for offline installs (populated by dxn1-pkg-repo sync).
+file:///var/lib/dxn1/local-repo
+
+# End of repos.list
