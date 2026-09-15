@@ -343,3 +343,33 @@ Stage Summary:
 - Security: the leaked deploy key is gone from history; the fresh key is registered and working.
 - Dev server running on localhost:3000 (HTTP 200).
 
+
+---
+Task ID: 14 (user: "theres no tag man !!! no release containing iso also first work on an update test it all make sure its fully downloadable")
+Agent: main (DXN1 lead engineer)
+Task: Create the actual GitHub Release with the ISO attached (tag existed but no Release), fix the failed workflow, test all download paths, ensure everything is fully downloadable.
+
+Work Log:
+- Confirmed the v1.0 tag existed on GitHub but the GitHub Actions release workflow had FAILED twice (both runs on the v1.0 tag push). Root cause: the workflow used webfactory/ssh-agent with secrets.SSH_DEPLOY_KEY, which isn't set in the repo — the action errored on empty input.
+- Rewrote .github/workflows/release.yml to NOT need the SSH secret: it uses the built-in GITHUB_TOKEN (permissions: contents: write) to create the release, verifies the prebuilt ISO + source ZIP exist in the repo, computes sha256 checksums, and attaches all assets via softprops/action-gh-release@v2. Dropped the ssh-agent + known_hosts steps entirely.
+- Committed the workflow fix, pushed to main.
+- Re-tagged v1.0 on the latest commit (force-pushed) to re-trigger the fixed workflow.
+- Waited for the workflow to run. Verified via the releases HTML page: the release was CREATED — found 'dxn1-os-1.0.iso' and 'releases/tag/v1.0' on https://github.com/DXN1-termux/DXN1-OS-TAKE-2/releases.
+- Verified the release ISO is fully downloadable: curl -sL https://github.com/DXN1-termux/DXN1-OS-TAKE-2/releases/download/v1.0/dxn1-os-1.0.iso → HTTP 200, 16,072,704 bytes. `file` confirms 'ISO 9660 CD-ROM filesystem data DXN1OS (bootable)'. sha256 = 3f965f38... (matches exactly).
+- Tested all download paths:
+  - Local /api/download/iso → HTTP 200, 16,072,704 bytes, sha256 matches.
+  - Local /api/download/source → HTTP 200, 91,779 bytes, 56 files.
+  - GitHub release download → HTTP 200, 16,072,704 bytes, sha256 matches.
+  - GitHub raw download → HTTP 200, 16,072,704 bytes.
+- Fixed /api/system/info: was reading the stale manifest.json from dxn1-os/iso-tree/ (build staging, may not exist). Now reads from public/dxn1-assets/manifest.json (committed, always present) + computes the ISO size from the file on disk via stat(). Returns the real github_url for the release download. Marked force-dynamic.
+- Updated DownloadCenter mirrors: replaced the fake EU/US mirrors with real ones — GitHub Release (releases/download/v1.0/...), GitHub Raw (raw.githubusercontent.com/...), This server (/api/download/iso), Build from source.
+- Committed + pushed all fixes (d82f1fc).
+
+Stage Summary:
+- GITHUB RELEASE IS LIVE: https://github.com/DXN1-termux/DXN1-OS-TAKE-2/releases/tag/v1.0
+- ISO directly downloadable from the release: https://github.com/DXN1-termux/DXN1-OS-TAKE-2/releases/download/v1.0/dxn1-os-1.0.iso (HTTP 200, 15.3 MiB, sha256 verified).
+- Release includes: dxn1-os-1.0.iso, dxn1-os-1.0.iso.sha256, dxn1-os-source.zip, dxn1-os-source.zip.sha256, manifest.json.
+- Fixed workflow (GITHUB_TOKEN, no SSH secret needed) — will work for all future tags (v1.1, v1.2, ...).
+- All download paths tested and working (local API + GitHub release + GitHub raw).
+- Dev server running, lint clean.
+
